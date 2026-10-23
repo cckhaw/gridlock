@@ -1,0 +1,173 @@
+import { create } from 'zustand';
+import { sound, vibrate } from '../audio/synth';
+import { applyAction, createInitialState, tickGame, voteIsolate } from '../engine/sim';
+import type { ActionType, ActiveTab, DistrictId, GameMode, GameSettings, GameState } from '../types/game';
+
+const SETTINGS_KEY = 'blackout-protocol:settings';
+
+function loadSettings(): GameSettings {
+  const def: GameSettings = { crtScanlines: true, muted: false, haptics: true };
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    return raw ? { ...def, ...JSON.parse(raw) } : def;
+  } catch {
+    return def;
+  }
+}
+
+function saveSettings(s: GameSettings) {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+interface Store {
+  g: GameState;
+  start: (mode: GameMode) => void;
+  toMenu: () => void;
+  tick: () => void;
+  setTab: (t: ActiveTab) => void;
+  selectNode: (id: DistrictId, goFocus?: boolean) => void;
+  setSupply: (mw: number) => void;
+  act: (type: ActionType, nodeId?: DistrictId) => void;
+  vote: (engineerId: string) => void;
+  flag: (engineerId: string) => void;
+  togglePause: () => void;
+  toggleMute: () => void;
+  toggleCrt: () => void;
+}
+
+const menuState = (settings: GameSettings): GameState => ({
+  ...createInitialState('SOLO_CRISIS', 1, settings),
+  phase: 'MENU',
+});
+
+const initialSettings = loadSettings();
+sound.setMuted(initialSettings.muted);
+
+export const useGame = create<Store>((set, get) => ({
+  g: menuState(initialSettings),
+
+  start: (mode) => {
+    const settings = get().g.settings;
+    sound.setMuted(settings.muted);
+    const g = createInitialState(mode, undefined, settings);
+    g.selectedNodeId = g.playerNodeId ?? 'downtown';
+    set({ g });
+    sound.click();
+    sound.startDrone();
+  },
+
+  toMenu: () => {
+    sound.stopDrone();
+    set({ g: menuState(get().g.settings) });
+  },
+
+  tick: () => {
+    const prev = get().g;
+    const next = tickGame(prev);
+    if (next === prev) return;
+    const haptics = next.settings.haptics;
+    let blackout = false;
+    let critical = false;
+    for (const id of Object.keys(next.nodes) as DistrictId[]) {
+      const a = prev.nodes[id].status;
+      const b = next.nodes[id].status;
+      if (a !== b && b === 'BLACKOUT') blackout = true;
+      if (a !== b && b === 'CRITICAL') critical = true;
+    }
+    const newHazard = next.hazards.some((h) => !prev.hazards.some((p) => p.id === h.id));
+    if (blackout) {
+      sound.blackout();
+      vibrate([200, 80, 200], haptics);
+    } else if (critical) {
+      sound.alarm();
+      vibrate(120, haptics);
+    } else if (newHazard) sound.hazard();
+    if (next.phase !== prev.phase) {
+      sound.stopDrone();
+      if (next.phase === 'VICTORY') sound.success();
+      else sound.fail();
+    }
+    set({ g: next });
+  },
+
+  setTab: (t) => {
+    const g = structuredClone(get().g);
+    g.activeTab = t;
+    if (t === 'LOGS' || t === 'DEDUCT') g.badges[t] = 0;
+    sound.tab();
+    set({ g });
+  },
+
+  selectNode: (id, goFocus) => {
+    const g = { ...get().g, selectedNodeId: id };
+    if (goFocus) g.activeTab = 'FOCUS';
+    sound.click();
+    set({ g });
+  },
+
+  setSupply: (mw) => {
+    const g = get().g;
+    set({ g: applyAction(g, { type: 'SET_SUPPLY', nodeId: g.selectedNodeId, amountMW: mw }) });
+  },
+
+  act: (type, nodeId) => {
+    const g = get().g;
+    const next = applyAction(g, { type, nodeId: nodeId ?? g.selectedNodeId });
+    if (next === g) return;
+    if (type === 'COOLANT') sound.coolant();
+    else if (type === 'REROUTE') sound.reroute();
+    else if (type === 'DIAGNOSTIC') sound.scan();
+    else sound.click();
+    vibrate(30, g.settings.haptics);
+    set({ g: next });
+  },
+
+  vote: (engineerId) => {
+    const g = get().g;
+    const next = voteIsolate(g, engineerId);
+    if (next === g) return;
+    vibrate([60, 40, 60], g.settings.haptics);
+    sound.warn();
+    if (next.phase !== g.phase) {
+      sound.stopDrone();
+      if (next.phase === 'VICTORY') sound.success();
+      else sound.fail();
+    }
+    set({ g: next });
+  },
+
+  flag: (engineerId) => {
+    const g = structuredClone(get().g);
+    const e = g.engineers.find((x) => x.id === engineerId);
+    if (e) e.flagged = !e.flagged;
+    sound.click();
+    set({ g });
+  },
+
+  togglePause: () => {
+    const g = { ...get().g };
+    if (g.phase === 'RUNNING') g.phase = 'PAUSED';
+    else if (g.phase === 'PAUSED') g.phase = 'RUNNING';
+    set({ g });
+  },
+
+  toggleMute: () => {
+    const g = get().g;
+    const settings = { ...g.settings, muted: !g.settings.muted };
+    sound.setMuted(settings.muted);
+    if (!settings.muted && g.phase === 'RUNNING') sound.startDrone();
+    saveSettings(settings);
+    set({ g: { ...g, settings } });
+  },
+
+  toggleCrt: () => {
+    const g = get().g;
+    const settings = { ...g.settings, crtScanlines: !g.settings.crtScanlines };
+    saveSettings(settings);
+    set({ g: { ...g, settings } });
+  },
+}));
