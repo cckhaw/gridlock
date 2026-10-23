@@ -10,7 +10,7 @@ import TopBar from './components/TopBar';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useGame } from './store/useGame';
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
   <section className="scada-panel flex min-h-0 flex-col">
@@ -19,18 +19,51 @@ const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
   </section>
 );
 
+function SwipeCards({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [page, setPage] = useState(0);
+  return (
+    <div>
+      <div
+        ref={ref}
+        onScroll={(e) => setPage(Math.round(e.currentTarget.scrollLeft / e.currentTarget.clientWidth))}
+        className="scrollbar-none flex snap-x snap-mandatory gap-2 overflow-x-auto"
+      >
+        {children}
+      </div>
+      <div className="mt-2 flex items-center justify-center gap-2 text-[10px] text-scada-dim">
+        {[0, 1].map((i) => (
+          <span key={i} className={`h-1.5 w-6 rounded ${page === i ? 'bg-scada-cobalt shadow-glow-cobalt' : 'bg-scada-border'}`} />
+        ))}
+        <span>SWIPE FOR MORE</span>
+      </div>
+    </div>
+  );
+}
+
 function GridView({ mobile }: { mobile: boolean }) {
   const nodes = useGame((s) => s.g.nodes);
   const setTab = useGame((s) => s.setTab);
   const selectNode = useGame((s) => s.selectNode);
+  const list = Object.values(nodes);
   return (
     <div className="flex flex-col gap-3">
       <GridMap />
-      <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
-        {Object.values(nodes).map((n) => (
-          <NodeCard key={n.id} node={n} onFocus={mobile ? () => { selectNode(n.id); setTab('FOCUS'); } : undefined} />
-        ))}
-      </div>
+      {mobile ? (
+        <SwipeCards>
+          {[0, 4].map((o) => (
+            <div key={o} className="grid w-full shrink-0 snap-center grid-cols-2 gap-2 pr-0.5">
+              {list.slice(o, o + 4).map((n) => (
+                <NodeCard key={n.id} node={n} onFocus={() => { selectNode(n.id); setTab('FOCUS'); }} />
+              ))}
+            </div>
+          ))}
+        </SwipeCards>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
+          {list.map((n) => <NodeCard key={n.id} node={n} />)}
+        </div>
+      )}
     </div>
   );
 }
