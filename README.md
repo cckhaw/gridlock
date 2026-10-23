@@ -19,6 +19,7 @@ npm run preview
 - First-run training overlay (re-open from the pause menu).
 - Post-game replay: health line, district temperature heatmap, scrubber and event timeline (saboteur actions revealed).
 - PWA: manifest, icons, service worker with an offline app shell, self-hosted fonts.
+- **3D night-city view** (three.js): each district is a themed neighbourhood (skyscrapers, factory stacks, hospital cross, metro train, houses, water tanks, radar, domes). Windows go amber/red/dark with status, power lines carry moving energy, storms bring rain and lightning, and alert pop-ups float over the affected district. Falls back to a flat map without WebGL.
 - Portrait phone layout with bottom dock and thumb-zone actions; landscape desktop dashboard.
 
 ## Layout

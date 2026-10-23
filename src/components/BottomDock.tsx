@@ -3,10 +3,10 @@ import { useGame } from '../store/useGame';
 import type { ActiveTab } from '../types/game';
 
 const TABS: { id: ActiveTab; label: string; Icon: LucideIcon }[] = [
-  { id: 'GRID', label: 'GRID', Icon: LayoutGrid },
-  { id: 'FOCUS', label: 'FOCUS', Icon: SlidersHorizontal },
-  { id: 'LOGS', label: 'LOGS', Icon: ScrollText },
-  { id: 'DEDUCT', label: 'DEDUCT', Icon: UserSearch },
+  { id: 'GRID', label: 'CITY', Icon: LayoutGrid },
+  { id: 'FOCUS', label: 'DISTRICT', Icon: SlidersHorizontal },
+  { id: 'LOGS', label: 'NEWS', Icon: ScrollText },
+  { id: 'DEDUCT', label: 'SUSPECTS', Icon: UserSearch },
 ];
 
 export default function BottomDock({ side = false }: { side?: boolean }) {

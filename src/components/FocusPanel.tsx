@@ -35,20 +35,20 @@ export default function FocusPanel() {
       </div>
 
       <div className="scada-panel grid grid-cols-3 gap-2 p-3 text-center">
-        <div><div className="text-[10px] text-scada-dim">DEMAND</div><div className="text-lg font-bold text-scada-amber">{Math.round(node.demand)}</div></div>
-        <div><div className="text-[10px] text-scada-dim">SUPPLY</div><div className="text-lg font-bold text-scada-cobalt">{Math.round(node.supply)}</div></div>
+        <div><div className="text-[10px] text-scada-dim">Needs</div><div className="text-lg font-bold text-scada-amber">{Math.round(node.demand)}</div></div>
+        <div><div className="text-[10px] text-scada-dim">Gets</div><div className="text-lg font-bold text-scada-cobalt">{Math.round(node.supply)}</div></div>
         <div>
-          <div className="text-[10px] text-scada-dim">DELTA</div>
+          <div className="text-[10px] text-scada-dim">Gap</div>
           <div className={`text-lg font-bold ${delta > 0 ? 'text-scada-crimson' : 'text-scada-mint'}`}>{delta > 0 ? '+' : ''}{delta}</div>
         </div>
-        <div className="col-span-3 text-[10px] text-scada-dim">MW · CAPACITY {node.capacity} · LOAD {Math.round((node.supply / node.capacity) * 100)}%
+        <div className="col-span-3 text-[10px] text-scada-dim">MW · max {node.capacity} · {Math.round((node.supply / node.capacity) * 100)}% loaded
           {node.redistributedLoad > 0 && <span className="text-scada-amber"> · +{Math.round(node.redistributedLoad)} MW rerouted in</span>}
         </div>
       </div>
 
       <div className="scada-panel flex flex-col gap-3 p-3">
-        <Gauge label="TEMPERATURE" value={node.temperature} max={120} markers={[80, 95]} color={tempColor(node.temperature)} display={`${node.temperature.toFixed(1)}°C`} />
-        <Gauge label="INTEGRITY" value={node.integrity} max={100} color={integrityColor(node.integrity)} display={`${Math.round(node.integrity)}%`} />
+        <Gauge label="Temperature" value={node.temperature} max={120} markers={[80, 95]} color={tempColor(node.temperature)} display={`${node.temperature.toFixed(1)}°C`} />
+        <Gauge label="Condition" value={node.integrity} max={100} color={integrityColor(node.integrity)} display={`${Math.round(node.integrity)}%`} />
         {node.coolantActive && <div className="text-[11px] text-scada-cobalt">❄ COOLANT FLUSH · {node.coolantRemaining}s</div>}
         {hazards.map((h) => (
           <div key={h.id} className="text-[11px] font-bold text-scada-amber">⚠ {h.type.replace('_', ' ')} · {h.remainingSec}s</div>
@@ -57,8 +57,8 @@ export default function FocusPanel() {
 
       <div className="scada-panel p-3">
         <div className="mb-1 flex justify-between text-[11px] text-scada-dim">
-          <span>POWER ALLOCATION</span>
-          <span>RESERVE <span className="text-scada-cobalt">{g.reserveMW} MW</span></span>
+          <span>Power sent to this district</span>
+          <span>Spare <span className="text-scada-cobalt">{g.reserveMW} MW</span></span>
         </div>
         <div className="flex items-center gap-2">
           <button className={nudge} disabled={!own || !online} onClick={() => setSupply(node.supply - 10)} aria-label="Decrease 10 MW"><Minus size={20} /></button>

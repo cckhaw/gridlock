@@ -2,69 +2,51 @@ import ActionBar from './components/ActionBar';
 import BottomDock from './components/BottomDock';
 import DeductPanel from './components/DeductPanel';
 import FocusPanel from './components/FocusPanel';
-import GridMap from './components/GridMap';
+import CityScene from './city/CityScene';
+import DistrictStrip from './components/DistrictStrip';
 import LogTerminal from './components/LogTerminal';
-import NodeCard from './components/NodeCard';
 import { EndScreen, MenuScreen } from './components/Screens';
 import TopBar from './components/TopBar';
 import Tutorial from './components/Tutorial';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useGame } from './store/useGame';
-import { useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
-const Panel = ({ title, children }: { title: string; children: ReactNode }) => (
-  <section className="scada-panel flex min-h-0 flex-col">
-    <h2 className="border-b border-scada-border px-3 py-1.5 text-[11px] font-bold tracking-widest text-scada-dim">{title}</h2>
-    <div className="min-h-0 flex-1 overflow-y-auto p-3">{children}</div>
-  </section>
-);
-
-function SwipeCards({ children }: { children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [page, setPage] = useState(0);
+function DesktopFeed() {
+  const [tab, setTab] = useState<'NEWS' | 'SUSPECTS' | null>(null);
+  const mode = useGame((s) => s.g.mode);
+  const chip = (id: 'NEWS' | 'SUSPECTS', label: string) => (
+    <button
+      onClick={() => setTab(tab === id ? null : id)}
+      className={`touch-target h-9 rounded-full border px-4 text-xs font-bold ${tab === id ? 'border-scada-cobalt bg-scada-cobalt/25 text-white' : 'border-white/15 bg-black/50 text-scada-dim'}`}
+    >
+      {label}
+    </button>
+  );
   return (
-    <div>
-      <div
-        ref={ref}
-        onScroll={(e) => setPage(Math.round(e.currentTarget.scrollLeft / e.currentTarget.clientWidth))}
-        className="scrollbar-none flex snap-x snap-mandatory gap-2 overflow-x-auto"
-      >
-        {children}
+    <div className="absolute inset-x-3 bottom-3 flex flex-col gap-2">
+      <div className="flex gap-2">
+        {chip('NEWS', 'City news')}
+        {chip('SUSPECTS', mode === 'SABOTEUR_DEDUCTION' ? 'Suspects' : 'Storm')}
       </div>
-      <div className="mt-2 flex items-center justify-center gap-2 text-[10px] text-scada-dim">
-        {[0, 1].map((i) => (
-          <span key={i} className={`h-1.5 w-6 rounded ${page === i ? 'bg-scada-cobalt shadow-glow-cobalt' : 'bg-scada-border'}`} />
-        ))}
-        <span>SWIPE FOR MORE</span>
-      </div>
+      {tab && (
+        <div className="scada-panel h-[30vh] min-h-[150px] overflow-y-auto p-2">
+          {tab === 'NEWS' ? <LogTerminal /> : <DeductPanel />}
+        </div>
+      )}
     </div>
   );
 }
 
 function GridView({ mobile }: { mobile: boolean }) {
-  const nodes = useGame((s) => s.g.nodes);
   const setTab = useGame((s) => s.setTab);
-  const selectNode = useGame((s) => s.selectNode);
-  const list = Object.values(nodes);
   return (
-    <div className="flex flex-col gap-3">
-      <GridMap />
-      {mobile ? (
-        <SwipeCards>
-          {[0, 4].map((o) => (
-            <div key={o} className="grid w-full shrink-0 snap-center grid-cols-2 gap-2 pr-0.5">
-              {list.slice(o, o + 4).map((n) => (
-                <NodeCard key={n.id} node={n} onFocus={() => { selectNode(n.id); setTab('FOCUS'); }} />
-              ))}
-            </div>
-          ))}
-        </SwipeCards>
-      ) : (
-        <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
-          {list.map((n) => <NodeCard key={n.id} node={n} />)}
-        </div>
-      )}
+    <div className="flex h-full flex-col gap-3">
+      <div className={mobile ? 'h-[52vh] min-h-[300px] landscape-short:h-[78vh]' : 'min-h-[300px] flex-1'}>
+        <CityScene />
+      </div>
+      <DistrictStrip onOpen={mobile ? () => setTab('FOCUS') : undefined} />
     </div>
   );
 }
@@ -85,17 +67,17 @@ export default function App() {
     body = (
       <div className="flex h-full flex-col">
         <TopBar />
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.1fr)_minmax(0,0.95fr)_minmax(0,1fr)] gap-3 p-3">
-          <Panel title="GRID MAP"><GridView mobile={false} /></Panel>
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(340px,400px)] gap-3 p-3">
+          <section className="relative min-h-0 overflow-hidden rounded-2xl">
+            <div className="absolute inset-0"><CityScene /></div>
+            <div className="absolute inset-x-3 top-3"><DistrictStrip chipsOnly /></div>
+            <DesktopFeed />
+          </section>
           <section className="scada-panel flex min-h-0 flex-col">
-            <h2 className="border-b border-scada-border px-3 py-1.5 text-[11px] font-bold tracking-widest text-scada-dim">ACTIVE CONTROLS</h2>
+            <h2 className="border-b border-white/10 px-4 py-2 text-xs font-bold tracking-widest text-scada-dim">DISTRICT</h2>
             <div className="min-h-0 flex-1 overflow-y-auto p-3"><FocusPanel /></div>
             <ActionBar />
           </section>
-          <div className="grid min-h-0 grid-rows-2 gap-3">
-            <Panel title="TELEMETRY LOG"><LogTerminal /></Panel>
-            <Panel title="SABOTEUR ROSTER"><DeductPanel /></Panel>
-          </div>
         </div>
       </div>
     );
@@ -136,7 +118,7 @@ export default function App() {
   }
 
   return (
-    <div className={`h-full bg-scada-bg font-mono text-scada-text ${crt ? 'crt-on' : ''}`}>
+    <div className={`h-full bg-scada-bg font-sans text-scada-text ${crt ? 'crt-on' : ''}`}>
       <div className="crt-flicker h-full">{body}</div>
       {tutorialOpen && phase === 'RUNNING' && <Tutorial />}
       {(phase === 'VICTORY' || phase === 'DEFEAT') && <EndScreen />}
