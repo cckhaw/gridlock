@@ -2,6 +2,7 @@ import type {
   AIEngineer,
   DistrictId,
   DistrictNode,
+  Difficulty,
   GameMode,
   GameState,
   HazardEvent,
@@ -11,7 +12,7 @@ import type {
   PlayerAction,
   SaboteurTactic,
 } from '../types/game';
-import { ADJACENCY, C, DISTRICT_DEFS, DISTRICT_ORDER } from './constants';
+import { ADJACENCY, C, DIFFICULTY, DISTRICT_DEFS, DISTRICT_ORDER } from './constants';
 import { mulberry32, pick, shuffle } from './rng';
 
 // ---------------------------------------------------------------------------
@@ -69,7 +70,7 @@ export function effectiveSupply(s: GameState, n: DistrictNode): number {
 }
 
 function weatherDrift(s: GameState, n: DistrictNode, idx: number): number {
-  const ramp = s.mode === 'SOLO_CRISIS' ? C.SOLO_RAMP : C.DEDUCT_RAMP;
+  const ramp = DIFFICULTY[s.difficulty].ramp[s.mode];
   return n.baseLoad * (0.03 * Math.sin(s.tick / 8 + idx * 1.3) + ramp * (s.tick / s.durationSec));
 }
 
@@ -101,6 +102,7 @@ export function createInitialState(
   mode: GameMode,
   seed = Math.floor(Math.random() * 2 ** 31),
   settings = { crtScanlines: true, muted: false, haptics: true },
+  difficulty: Difficulty = 'OPERATOR',
 ): GameState {
   const rng = mulberry32(seed);
   const nodes = {} as Record<DistrictId, DistrictNode>;
@@ -134,6 +136,8 @@ export function createInitialState(
 
   const s: GameState = {
     mode,
+    difficulty,
+    stats: { healthSum: 0, minHealth: 100, coolantUses: 0, hazardsSeen: 0, peakTemp: 60 },
     phase: 'RUNNING',
     activeTab: 'GRID',
     selectedNodeId: 'downtown',
@@ -154,7 +158,7 @@ export function createInitialState(
     playerNodeId: null,
     engineers: [],
     votes: [],
-    scansRemaining: mode === 'SABOTEUR_DEDUCTION' ? C.SCANS_AVAILABLE : 0,
+    scansRemaining: mode === 'SABOTEUR_DEDUCTION' ? DIFFICULTY[difficulty].scans : 0,
     wrongVotes: 0,
     endReason: null,
     settings,
@@ -168,7 +172,7 @@ export function createInitialState(
     n.loggedSupply = n.supply;
   });
   const total = nodeList(s).reduce((a, n) => a + n.supply, 0);
-  const factor = mode === 'SOLO_CRISIS' ? C.SOLO_RESERVE_FACTOR : C.DEDUCT_RESERVE_FACTOR;
+  const factor = DIFFICULTY[difficulty].reserveFactor[mode];
   s.generationMW = Math.round((total * factor) / 10) * 10;
   s.reserveMW = computeReserve(s);
 
@@ -215,7 +219,8 @@ function spawnHazard(s: GameState, rng: () => number) {
   const online = nodeList(s).filter(isOnline);
   if (!online.length) return;
   const target = pick(rng, online);
-  const esc = 1 + 0.6 * (s.tick / s.durationSec);
+  const esc = (1 + 0.6 * (s.tick / s.durationSec)) * DIFFICULTY[s.difficulty].hazardScale;
+  s.stats.hazardsSeen += 1;
   const roll = rng();
   const base = { id: `H${s.tick}-${target.id}`, targetNodeId: target.id, startedAtTick: s.tick };
   let h: HazardEvent;
@@ -252,7 +257,7 @@ function runEngineer(s: GameState, e: AIEngineer, rng: () => number) {
   if (sab) {
     if (e.activeTactic && s.tick >= e.tacticUntilTick) {
       e.activeTactic = null;
-      e.nextTacticTick = s.tick + 18 + Math.floor(rng() * 14);
+      e.nextTacticTick = s.tick + Math.round((18 + Math.floor(rng() * 14)) * DIFFICULTY[s.difficulty].saboteurGap);
     } else if (!e.activeTactic && s.tick >= e.nextTacticTick) {
       e.activeTactic = pick(rng, e.tactics);
       e.tacticUntilTick = s.tick + 8 + Math.floor(rng() * 5);
@@ -296,7 +301,8 @@ function runEngineer(s: GameState, e: AIEngineer, rng: () => number) {
 function resolveScan(s: GameState, n: DistrictNode, rng: () => number) {
   const e = s.engineers.find((x) => x.nodeId === n.id);
   if (!e) return;
-  const anomaly = e.role === 'SABOTEUR' && !e.isolated ? rng() < 0.8 : rng() < 0.1;
+  const acc = DIFFICULTY[s.difficulty].scanAccuracy;
+  const anomaly = e.role === 'SABOTEUR' && !e.isolated ? rng() < acc : rng() < (1 - acc) / 2;
   e.scanStatus = anomaly ? 'ANOMALY' : 'CLEAN';
   addLog(
     s,
@@ -431,6 +437,9 @@ export function tickGame(prev: GameState): GameState {
     wSum += n.baseLoad * (0.5 * (n.integrity / 100) + 0.5 * sat);
   }
   s.gridHealth = Math.round((wSum / wTotal) * 100);
+  s.stats.healthSum += s.gridHealth;
+  s.stats.minHealth = Math.min(s.stats.minHealth, s.gridHealth);
+  s.stats.peakTemp = Math.max(s.stats.peakTemp, ...nodeList(s).map((n) => n.temperature));
   s.badges.GRID = nodeList(s).filter((n) => n.status === 'CRITICAL' || n.status === 'BLACKOUT').length;
   s.badges.FOCUS = ['CRITICAL', 'BLACKOUT'].includes(s.nodes[s.selectedNodeId].status) ? 1 : 0;
   if (s.activeTab === 'LOGS') s.badges.LOGS = 0;
@@ -506,6 +515,7 @@ export function applyAction(prev: GameState, a: PlayerAction): GameState {
       n.coolantActive = true;
       n.coolantRemaining = C.COOLANT_DURATION;
       n.coolantCooldown = C.COOLANT_COOLDOWN;
+      s.stats.coolantUses += 1;
       addLog(s, 'INFO', 'COOLANT', 'PLAYER', `PLAYER COOLANT FLUSH on ${name} at ${Math.round(n.temperature)}°C`, n.id);
       break;
     }

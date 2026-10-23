@@ -4,6 +4,16 @@
 
 export type GameMode = 'SOLO_CRISIS' | 'SABOTEUR_DEDUCTION';
 
+export type Difficulty = 'CADET' | 'OPERATOR' | 'VETERAN';
+
+export interface RunStats {
+  healthSum: number;
+  minHealth: number;
+  coolantUses: number;
+  hazardsSeen: number;
+  peakTemp: number;
+}
+
 export type GamePhase = 'MENU' | 'RUNNING' | 'PAUSED' | 'VICTORY' | 'DEFEAT';
 
 /** Mobile bottom-dock tabs (all four are shown side-by-side on desktop). */
@@ -139,6 +149,8 @@ export interface GameSettings {
 
 export interface GameState {
   mode: GameMode;
+  difficulty: Difficulty;
+  stats: RunStats;
   phase: GamePhase;
   activeTab: ActiveTab;
   selectedNodeId: DistrictId;
