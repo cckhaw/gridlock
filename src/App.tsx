@@ -7,6 +7,7 @@ import LogTerminal from './components/LogTerminal';
 import NodeCard from './components/NodeCard';
 import { EndScreen, MenuScreen } from './components/Screens';
 import TopBar from './components/TopBar';
+import Tutorial from './components/Tutorial';
 import { useGameLoop } from './hooks/useGameLoop';
 import { useMediaQuery } from './hooks/useMediaQuery';
 import { useGame } from './store/useGame';
@@ -73,6 +74,7 @@ export default function App() {
   const phase = useGame((s) => s.g.phase);
   const tab = useGame((s) => s.g.activeTab);
   const crt = useGame((s) => s.g.settings.crtScanlines);
+  const tutorialOpen = useGame((s) => s.tutorialOpen);
   const desktop = useMediaQuery('(min-width: 900px) and (orientation: landscape)');
 
   let body: ReactNode;
@@ -117,11 +119,15 @@ export default function App() {
   return (
     <div className={`h-full bg-scada-bg font-mono text-scada-text ${crt ? 'crt-on' : ''}`}>
       <div className="crt-flicker h-full">{body}</div>
+      {tutorialOpen && phase === 'RUNNING' && <Tutorial />}
       {(phase === 'VICTORY' || phase === 'DEFEAT') && <EndScreen />}
       {phase === 'PAUSED' && (
-        <button className="fixed inset-0 z-50 flex items-center justify-center bg-scada-bg/80 text-xl font-bold text-scada-amber" onClick={() => useGame.getState().togglePause()}>
-          PAUSED — TAP TO RESUME
-        </button>
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-scada-bg/85">
+          <div className="text-xl font-bold text-scada-amber">PAUSED</div>
+          <button className="touch-target h-12 w-56 rounded border border-scada-mint text-sm font-bold text-scada-mint" onClick={() => useGame.getState().togglePause()}>RESUME</button>
+          <button className="touch-target h-12 w-56 rounded border border-scada-cobalt text-sm font-bold text-scada-cobalt" onClick={() => { useGame.getState().togglePause(); useGame.getState().openTutorial(); }}>TRAINING</button>
+          <button className="touch-target h-12 w-56 rounded border border-scada-border text-sm font-bold" onClick={() => useGame.getState().toMenu()}>QUIT TO MENU</button>
+        </div>
       )}
       <div className="crt-overlay" />
     </div>

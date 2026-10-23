@@ -46,8 +46,30 @@ export function loadBest(): Record<string, number> {
   }
 }
 
+const TUT_KEY = 'blackout-protocol:tutorial-seen';
+
+function tutorialSeen(mode: GameMode): boolean {
+  try {
+    return (JSON.parse(localStorage.getItem(TUT_KEY) ?? '{}') as Record<string, boolean>)[mode] === true;
+  } catch {
+    return false;
+  }
+}
+
+function markTutorialSeen(mode: GameMode) {
+  try {
+    const seen = JSON.parse(localStorage.getItem(TUT_KEY) ?? '{}');
+    localStorage.setItem(TUT_KEY, JSON.stringify({ ...seen, [mode]: true }));
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 interface Store {
   g: GameState;
+  tutorialOpen: boolean;
+  openTutorial: () => void;
+  closeTutorial: () => void;
   difficulty: Difficulty;
   best: Record<string, number>;
   setDifficulty: (d: Difficulty) => void;
@@ -76,6 +98,12 @@ sound.setMuted(initialSettings.muted);
 
 export const useGame = create<Store>((set, get) => ({
   g: menuState(initialSettings),
+  tutorialOpen: false,
+  openTutorial: () => set({ tutorialOpen: true }),
+  closeTutorial: () => {
+    markTutorialSeen(get().g.mode);
+    set({ tutorialOpen: false });
+  },
   difficulty: loadDifficulty(),
   best: loadBest(),
 
@@ -106,14 +134,14 @@ export const useGame = create<Store>((set, get) => ({
     sound.setMuted(settings.muted);
     const g = createInitialState(mode, undefined, settings, get().difficulty);
     g.selectedNodeId = g.playerNodeId ?? 'downtown';
-    set({ g });
+    set({ g, tutorialOpen: !tutorialSeen(mode) });
     sound.click();
     sound.startDrone();
   },
 
   toMenu: () => {
     sound.stopDrone();
-    set({ g: menuState(get().g.settings) });
+    set({ g: menuState(get().g.settings), tutorialOpen: false });
   },
 
   tick: () => {
