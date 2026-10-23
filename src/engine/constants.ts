@@ -24,7 +24,6 @@ export const C = {
   COOLANT_COOLDOWN: 15,
   DIAGNOSTIC_TIME_SOLO: 4,
   SCAN_TIME: 5,
-  SCANS_AVAILABLE: 3,
   REROUTE_STEP_MW: 60,
   MAX_WRONG_VOTES: 3,
 
@@ -34,13 +33,43 @@ export const C = {
   FIRST_HAZARD_SEC: 8,
 
   // Escalation / sizing
-  SOLO_RESERVE_FACTOR: 1.08,
-  DEDUCT_RESERVE_FACTOR: 1.12,
-  SOLO_RAMP: 0.1,
-  DEDUCT_RAMP: 0.05,
   CAPACITY_FACTOR: 1.4,
   DEFEAT_BLACKOUTS: 4,
 } as const;
+
+export interface DifficultyDef {
+  label: string;
+  blurb: string;
+  reserveFactor: { SOLO_CRISIS: number; SABOTEUR_DEDUCTION: number };
+  ramp: { SOLO_CRISIS: number; SABOTEUR_DEDUCTION: number };
+  hazardScale: number;
+  /** Saboteur tactic gap multiplier (smaller = more frequent). */
+  saboteurGap: number;
+  scanAccuracy: number;
+  scans: number;
+  scoreMult: number;
+}
+
+export const DIFFICULTY: Record<'CADET' | 'OPERATOR' | 'VETERAN', DifficultyDef> = {
+  CADET: {
+    label: 'CADET', blurb: 'Generous reserve, mild storm, reliable scans.',
+    reserveFactor: { SOLO_CRISIS: 1.12, SABOTEUR_DEDUCTION: 1.16 },
+    ramp: { SOLO_CRISIS: 0.07, SABOTEUR_DEDUCTION: 0.03 },
+    hazardScale: 0.8, saboteurGap: 1.3, scanAccuracy: 0.9, scans: 4, scoreMult: 0.75,
+  },
+  OPERATOR: {
+    label: 'OPERATOR', blurb: 'The intended experience.',
+    reserveFactor: { SOLO_CRISIS: 1.08, SABOTEUR_DEDUCTION: 1.12 },
+    ramp: { SOLO_CRISIS: 0.1, SABOTEUR_DEDUCTION: 0.05 },
+    hazardScale: 1, saboteurGap: 1, scanAccuracy: 0.8, scans: 3, scoreMult: 1,
+  },
+  VETERAN: {
+    label: 'VETERAN', blurb: 'Thin reserve, violent storm, noisy scans.',
+    reserveFactor: { SOLO_CRISIS: 1.07, SABOTEUR_DEDUCTION: 1.08 },
+    ramp: { SOLO_CRISIS: 0.11, SABOTEUR_DEDUCTION: 0.08 },
+    hazardScale: 1.15, saboteurGap: 0.65, scanAccuracy: 0.7, scans: 2, scoreMult: 1.5,
+  },
+};
 
 interface DistrictDef {
   name: string;

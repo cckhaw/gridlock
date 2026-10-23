@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { sound, vibrate } from '../audio/synth';
 import { applyAction, createInitialState, tickGame, voteIsolate } from '../engine/sim';
-import type { ActionType, ActiveTab, DistrictId, GameMode, GameSettings, GameState } from '../types/game';
+import type { ActionType, ActiveTab, Difficulty, DistrictId, GameMode, GameSettings, GameState } from '../types/game';
 
 const SETTINGS_KEY = 'blackout-protocol:settings';
 
@@ -23,8 +23,35 @@ function saveSettings(s: GameSettings) {
   }
 }
 
+const DIFF_KEY = 'blackout-protocol:difficulty';
+const BEST_KEY = 'blackout-protocol:best';
+
+function loadDifficulty(): Difficulty {
+  try {
+    const v = localStorage.getItem(DIFF_KEY);
+    if (v === 'CADET' || v === 'OPERATOR' || v === 'VETERAN') return v;
+  } catch {
+    /* storage unavailable */
+  }
+  return 'OPERATOR';
+}
+
+export const bestKey = (mode: GameMode, d: Difficulty) => `${mode}:${d}`;
+
+export function loadBest(): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem(BEST_KEY) ?? '{}');
+  } catch {
+    return {};
+  }
+}
+
 interface Store {
   g: GameState;
+  difficulty: Difficulty;
+  best: Record<string, number>;
+  setDifficulty: (d: Difficulty) => void;
+  recordScore: (score: number) => void;
   start: (mode: GameMode) => void;
   toMenu: () => void;
   tick: () => void;
@@ -49,11 +76,35 @@ sound.setMuted(initialSettings.muted);
 
 export const useGame = create<Store>((set, get) => ({
   g: menuState(initialSettings),
+  difficulty: loadDifficulty(),
+  best: loadBest(),
+
+  setDifficulty: (difficulty) => {
+    try {
+      localStorage.setItem(DIFF_KEY, difficulty);
+    } catch {
+      /* storage unavailable */
+    }
+    set({ difficulty });
+  },
+
+  recordScore: (score) => {
+    const { g, difficulty, best } = get();
+    const k = bestKey(g.mode, g.difficulty ?? difficulty);
+    if (score <= (best[k] ?? 0)) return;
+    const next = { ...best, [k]: score };
+    try {
+      localStorage.setItem(BEST_KEY, JSON.stringify(next));
+    } catch {
+      /* storage unavailable */
+    }
+    set({ best: next });
+  },
 
   start: (mode) => {
     const settings = get().g.settings;
     sound.setMuted(settings.muted);
-    const g = createInitialState(mode, undefined, settings);
+    const g = createInitialState(mode, undefined, settings, get().difficulty);
     g.selectedNodeId = g.playerNodeId ?? 'downtown';
     set({ g });
     sound.click();
