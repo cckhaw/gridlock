@@ -1,5 +1,6 @@
 import { Radio, Siren, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useInstall } from '../pwa';
 import Replay from './Replay';
 import { DIFFICULTY } from '../engine/constants';
 import { computeScore } from '../engine/score';
@@ -13,6 +14,7 @@ export function MenuScreen() {
   const difficulty = useGame((s) => s.difficulty);
   const setDifficulty = useGame((s) => s.setDifficulty);
   const best = useGame((s) => s.best);
+  const pwa = useInstall();
   const Mode = ({ mode, title, desc, Icon }: { mode: GameMode; title: string; desc: string; Icon: typeof Siren }) => (
     <button onClick={() => start(mode)} className="touch-target scada-panel flex w-full items-start gap-3 border border-scada-cobalt/60 p-4 text-left">
       <Icon size={28} className="mt-0.5 shrink-0 text-scada-cobalt" />
@@ -50,6 +52,11 @@ export function MenuScreen() {
       <Mode mode="SOLO_CRISIS" title="SOLO CRISIS" Icon={Siren} desc="Run all 8 districts through an escalating 5:00 storm. Hazards strike every 15–20s." />
       <Mode mode="SABOTEUR_DEDUCTION" title="VS AI SABOTEURS" Icon={Users} desc="Run one district beside 7 AI engineers. Two are saboteurs — read the telemetry log, scan, and vote them out." />
       <div className="text-[11px] text-scada-dim">First run of each mode shows a short training briefing. Tap a mode, then SKIP any time.</div>
+      {pwa.canPrompt && (
+        <button onClick={pwa.install} className="touch-target h-12 rounded border border-scada-cobalt text-xs font-bold text-scada-cobalt">INSTALL APP</button>
+      )}
+      {pwa.iosHint && <div className="text-[11px] text-scada-dim">To install: tap Share, then “Add to Home Screen”.</div>}
+      {pwa.offlineReady && <div className="text-[11px] text-scada-mint">● Offline ready — plays without a connection.</div>}
       <button onClick={toggleCrt} className="touch-target text-xs text-scada-dim">CRT scanlines: <b className={crt ? 'text-scada-mint' : ''}>{crt ? 'ON' : 'OFF'}</b></button>
     </main>
   );
