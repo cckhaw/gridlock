@@ -16,13 +16,13 @@ export default function NodeCard({ node, onFocus }: { node: DistrictNode; onFocu
       tabIndex={0}
       onClick={() => selectNode(node.id)}
       onKeyDown={(e) => e.key === 'Enter' && selectNode(node.id)}
-      className={`touch-target scada-panel relative flex min-h-[132px] flex-col gap-1.5 border p-2.5 ${st.border} ${st.glow} ${
+      className={`touch-target scada-panel relative flex min-h-[140px] flex-col gap-1.5 border p-2.5 ${st.border} ${st.glow} ${
         selected ? 'ring-2 ring-scada-cobalt' : ''
       } ${down ? 'opacity-60' : ''}`}
     >
       <div className="flex items-center gap-2">
         <Icon size={18} className={st.text} />
-        <div className="min-w-0 flex-1 truncate text-xs font-bold">{node.name}</div>
+        <div className="min-w-0 flex-1 text-xs font-bold leading-tight">{node.name}</div>
         {node.coolantActive && <Snowflake size={14} className="text-scada-cobalt" />}
         {onFocus && (
           <button
