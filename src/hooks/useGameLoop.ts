@@ -4,7 +4,7 @@ import { useGame } from '../store/useGame';
 
 /** Drives the 1000ms tick engine while the game is running. */
 export function useGameLoop() {
-  const running = useGame((s) => s.g.phase === 'RUNNING');
+  const running = useGame((s) => s.g.phase === 'RUNNING' && !s.tutorialOpen);
   const tick = useGame((s) => s.tick);
   useEffect(() => {
     if (!running) return;

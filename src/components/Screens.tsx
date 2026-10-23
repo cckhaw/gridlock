@@ -49,6 +49,7 @@ export function MenuScreen() {
       </div>
       <Mode mode="SOLO_CRISIS" title="SOLO CRISIS" Icon={Siren} desc="Run all 8 districts through an escalating 5:00 storm. Hazards strike every 15–20s." />
       <Mode mode="SABOTEUR_DEDUCTION" title="VS AI SABOTEURS" Icon={Users} desc="Run one district beside 7 AI engineers. Two are saboteurs — read the telemetry log, scan, and vote them out." />
+      <div className="text-[11px] text-scada-dim">First run of each mode shows a short training briefing. Tap a mode, then SKIP any time.</div>
       <button onClick={toggleCrt} className="touch-target text-xs text-scada-dim">CRT scanlines: <b className={crt ? 'text-scada-mint' : ''}>{crt ? 'ON' : 'OFF'}</b></button>
     </main>
   );
