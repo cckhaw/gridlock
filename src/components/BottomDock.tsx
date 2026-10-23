@@ -9,12 +9,18 @@ const TABS: { id: ActiveTab; label: string; Icon: LucideIcon }[] = [
   { id: 'DEDUCT', label: 'DEDUCT', Icon: UserSearch },
 ];
 
-export default function BottomDock() {
+export default function BottomDock({ side = false }: { side?: boolean }) {
   const active = useGame((s) => s.g.activeTab);
   const badges = useGame((s) => s.g.badges);
   const setTab = useGame((s) => s.setTab);
   return (
-    <nav className="pb-safe fixed inset-x-0 bottom-0 z-40 flex border-t border-scada-border bg-scada-panel">
+    <nav
+      className={
+        side
+          ? 'flex w-16 shrink-0 flex-col border-r border-scada-border bg-scada-panel'
+          : 'pb-safe fixed inset-x-0 bottom-0 z-40 flex border-t border-scada-border bg-scada-panel'
+      }
+    >
       {TABS.map(({ id, label, Icon }) => {
         const on = active === id;
         const badge = badges[id];
@@ -22,15 +28,15 @@ export default function BottomDock() {
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`touch-target relative flex h-16 flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-bold ${
+            className={`touch-target relative flex ${side ? 'w-full' : 'h-16'} flex-1 flex-col items-center justify-center gap-0.5 text-[11px] font-bold ${
               on ? 'text-scada-cobalt text-glow-cobalt' : 'text-scada-dim'
             }`}
           >
-            {on && <span className="absolute inset-x-4 top-0 h-0.5 bg-scada-cobalt shadow-glow-cobalt" />}
+            {on && <span className={`absolute bg-scada-cobalt shadow-glow-cobalt ${side ? 'inset-y-3 left-0 w-0.5' : 'inset-x-4 top-0 h-0.5'}`} />}
             <Icon size={22} />
             {label}
             {badge > 0 && id !== active && (
-              <span className="absolute right-[22%] top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-scada-crimson px-1 text-[10px] text-white shadow-glow-crimson">
+              <span className="absolute right-[18%] top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-scada-crimson px-1 text-[10px] text-white shadow-glow-crimson">
                 {badge > 9 ? '9+' : badge}
               </span>
             )}

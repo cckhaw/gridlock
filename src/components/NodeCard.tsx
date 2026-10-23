@@ -22,7 +22,7 @@ export default function NodeCard({ node, onFocus }: { node: DistrictNode; onFocu
     >
       <div className="flex items-center gap-2">
         <Icon size={18} className={st.text} />
-        <div className="min-w-0 flex-1 text-xs font-bold leading-tight">{node.name}</div>
+        <div className="min-w-0 flex-1 break-words text-xs font-bold leading-tight">{node.name}</div>
         {node.coolantActive && <Snowflake size={14} className="text-scada-cobalt" />}
         {onFocus && (
           <button

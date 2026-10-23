@@ -15,7 +15,7 @@ export default function GridMap() {
   const selectNode = useGame((s) => s.selectNode);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full rounded border border-scada-border bg-scada-bg" role="img" aria-label="Grid map">
+    <svg viewBox={`0 0 ${W} ${H}`} className="mx-auto max-h-[34vh] w-full rounded border border-scada-border bg-scada-bg lg:max-h-[40vh] landscape-short:max-h-[72vh]" role="img" aria-label="Grid map">
       <defs>
         <pattern id="gridbg" width="6" height="6" patternUnits="userSpaceOnUse">
           <path d="M6 0H0V6" fill="none" stroke="#1E293B" strokeWidth="0.15" />

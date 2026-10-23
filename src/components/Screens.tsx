@@ -28,7 +28,7 @@ export function MenuScreen() {
     </button>
   );
   return (
-    <main className="pt-safe pb-safe mx-auto flex min-h-full max-w-md flex-col justify-center gap-4 p-5">
+    <main className="pt-safe pb-safe mx-auto flex min-h-full max-w-md flex-col gap-4 p-5 before:flex-1 before:content-[''] after:flex-1 after:content-['']">
       <div>
         <div className="flex items-center gap-2 text-scada-mint"><Radio size={20} /><span className="text-[11px]">SCADA // GRID CONTROL</span></div>
         <h1 className="text-3xl font-bold text-scada-mint text-glow-mint">BLACKOUT<br />PROTOCOL</h1>

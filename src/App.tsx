@@ -75,7 +75,8 @@ export default function App() {
   const tab = useGame((s) => s.g.activeTab);
   const crt = useGame((s) => s.g.settings.crtScanlines);
   const tutorialOpen = useGame((s) => s.tutorialOpen);
-  const desktop = useMediaQuery('(min-width: 900px) and (orientation: landscape)');
+  const desktop = useMediaQuery('(min-width: 900px) and (min-height: 600px) and (orientation: landscape)');
+  const compact = useMediaQuery('(orientation: landscape) and (max-height: 599px)');
 
   let body: ReactNode;
   if (phase === 'MENU') {
@@ -84,15 +85,33 @@ export default function App() {
     body = (
       <div className="flex h-full flex-col">
         <TopBar />
-        <div className="grid min-h-0 flex-1 grid-cols-[1.4fr_1fr] grid-rows-2 gap-3 p-3">
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1.1fr)_minmax(0,0.95fr)_minmax(0,1fr)] gap-3 p-3">
           <Panel title="GRID MAP"><GridView mobile={false} /></Panel>
           <section className="scada-panel flex min-h-0 flex-col">
             <h2 className="border-b border-scada-border px-3 py-1.5 text-[11px] font-bold tracking-widest text-scada-dim">ACTIVE CONTROLS</h2>
             <div className="min-h-0 flex-1 overflow-y-auto p-3"><FocusPanel /></div>
             <ActionBar />
           </section>
-          <Panel title="TELEMETRY LOG"><LogTerminal /></Panel>
-          <Panel title="SABOTEUR ROSTER"><DeductPanel /></Panel>
+          <div className="grid min-h-0 grid-rows-2 gap-3">
+            <Panel title="TELEMETRY LOG"><LogTerminal /></Panel>
+            <Panel title="SABOTEUR ROSTER"><DeductPanel /></Panel>
+          </div>
+        </div>
+      </div>
+    );
+  } else if (compact) {
+    body = (
+      <div className="flex h-full flex-col">
+        <TopBar />
+        <div className="flex min-h-0 flex-1">
+          <BottomDock side />
+          <main className="min-h-0 flex-1 overflow-y-auto p-2">
+            {tab === 'GRID' && <GridView mobile />}
+            {tab === 'FOCUS' && <FocusPanel />}
+            {tab === 'LOGS' && <div className="h-full min-h-40"><LogTerminal /></div>}
+            {tab === 'DEDUCT' && <DeductPanel />}
+          </main>
+          {tab !== 'LOGS' && <ActionBar vertical className="shrink-0 overflow-y-auto" />}
         </div>
       </div>
     );
