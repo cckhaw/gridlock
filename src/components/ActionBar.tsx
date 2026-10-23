@@ -5,8 +5,9 @@ import { canControl } from '../engine/sim';
 import { useGame } from '../store/useGame';
 
 function Btn({
-  Icon, label, sub, onClick, disabled, tone, armed,
+  Icon, label, sub, onClick, disabled, tone, armed, vertical,
 }: {
+  vertical?: boolean;
   Icon: LucideIcon; label: string; sub?: string; onClick: () => void; disabled?: boolean;
   tone: 'cobalt' | 'mint' | 'crimson' | 'amber'; armed?: boolean;
 }) {
@@ -20,7 +21,7 @@ function Btn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`touch-target flex h-14 flex-1 flex-col items-center justify-center rounded border bg-scada-bg text-[11px] font-bold disabled:opacity-35 ${tones[tone]} ${
+      className={`touch-target flex h-14 ${vertical ? 'w-24 flex-none' : 'flex-1'} flex-col items-center justify-center rounded border bg-scada-bg text-[11px] font-bold disabled:opacity-35 ${tones[tone]} ${
         armed ? 'animate-alarm-pulse bg-scada-crimson/20' : ''
       }`}
     >
@@ -31,7 +32,7 @@ function Btn({
   );
 }
 
-export default function ActionBar({ className = '' }: { className?: string }) {
+export default function ActionBar({ className = '', vertical = false }: { className?: string; vertical?: boolean }) {
   const g = useGame((s) => s.g);
   const act = useGame((s) => s.act);
   const vote = useGame((s) => s.vote);
@@ -66,10 +67,11 @@ export default function ActionBar({ className = '' }: { className?: string }) {
   const isoLabel = deduction ? (armed ? 'CONFIRM' : 'VOTE OUT') : node.isolated ? 'RECONNECT' : 'ISOLATE';
 
   return (
-    <div className={`flex gap-2 border-t border-scada-border bg-scada-panel/95 p-2 ${className}`}>
-      <Btn Icon={Route} label="REROUTE" sub="+60MW" tone="cobalt" disabled={!own || !online} onClick={() => act('REROUTE')} />
-      <Btn Icon={Snowflake} label="COOLANT" sub={coolSub} tone="mint" disabled={!coolOk} onClick={() => act('COOLANT')} />
+    <div className={`flex gap-2 bg-scada-panel/95 p-2 ${vertical ? 'flex-col justify-center border-l' : 'border-t'} border-scada-border ${className}`}>
+      <Btn vertical={vertical} Icon={Route} label="REROUTE" sub="+60MW" tone="cobalt" disabled={!own || !online} onClick={() => act('REROUTE')} />
+      <Btn vertical={vertical} Icon={Snowflake} label="COOLANT" sub={coolSub} tone="mint" disabled={!coolOk} onClick={() => act('COOLANT')} />
       <Btn
+        vertical={vertical}
         Icon={deduction ? Ban : Unplug} label={isoLabel} tone="crimson" armed={armed} disabled={!isoOk}
         onClick={() => {
           if (!deduction) return act('ISOLATE');
@@ -78,7 +80,7 @@ export default function ActionBar({ className = '' }: { className?: string }) {
           if (eng) vote(eng.id);
         }}
       />
-      <Btn Icon={ScanSearch} label="DIAGNOSE" sub={diagSub} tone="amber" disabled={!diagOk} onClick={() => act('DIAGNOSTIC')} />
+      <Btn vertical={vertical} Icon={ScanSearch} label="DIAGNOSE" sub={diagSub} tone="amber" disabled={!diagOk} onClick={() => act('DIAGNOSTIC')} />
     </div>
   );
 }

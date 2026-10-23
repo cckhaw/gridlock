@@ -27,7 +27,7 @@ export default function FocusPanel() {
         <div className={`scada-panel flex min-w-0 flex-1 items-center gap-2 border px-3 py-2 ${st.border}`}>
           <Icon size={26} className={st.text} />
           <div className="min-w-0">
-            <div className="truncate text-sm font-bold">{node.name}</div>
+            <div className="text-sm font-bold leading-tight">{node.name}</div>
             <div className={`text-[11px] font-bold ${st.text}`}>{st.label} <span className="text-scada-dim">· {owner}</span></div>
           </div>
         </div>
