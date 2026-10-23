@@ -87,3 +87,29 @@ describe('deduction mode', () => {
     expect(s.phase).toBe('VICTORY');
   });
 });
+
+describe('replay data & saboteur behaviour', () => {
+  it('records one history point per tick and secret tactic events', () => {
+    const s = run(createInitialState('SABOTEUR_DEDUCTION', 11), 150);
+    expect(s.history).toHaveLength(150);
+    expect(s.history[0].temps).toHaveLength(8);
+    expect(s.timeline.some((e) => e.kind === 'TACTIC' && e.secret)).toBe(true);
+    expect(s.timeline.some((e) => e.kind === 'HAZARD')).toBe(true);
+  });
+
+  it('saboteur false alarms sometimes frame a different district', () => {
+    let framed = 0;
+    let total = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const s = run(createInitialState('SABOTEUR_DEDUCTION', seed), 200);
+      for (const l of s.logs.filter((x) => x.category === 'ALARM' && x.source.startsWith('ENG-'))) {
+        const e = s.engineers.find((x) => x.callsign === l.source)!;
+        if (e.role !== 'SABOTEUR') continue;
+        total++;
+        if (l.nodeId !== e.nodeId) framed++;
+      }
+    }
+    expect(total).toBeGreaterThan(0);
+    expect(framed).toBeGreaterThan(0);
+  });
+});

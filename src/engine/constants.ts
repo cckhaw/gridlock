@@ -3,7 +3,7 @@ import type { DistrictId } from '../types/game';
 export const C = {
   TICK_MS: 1000,
   DURATION_SEC: 300,
-  MAX_LOGS: 250,
+  MAX_LOGS: 700,
 
   // Thermal model
   TEMP_NOMINAL: 60,

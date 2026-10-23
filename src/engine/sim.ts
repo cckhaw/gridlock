@@ -6,6 +6,7 @@ import type {
   GameMode,
   GameState,
   HazardEvent,
+  TimelineEvent,
   LogCategory,
   LogSeverity,
   NodeStatus,
@@ -46,6 +47,10 @@ export function addLog(
   });
   if (s.logs.length > C.MAX_LOGS) s.logs.splice(0, s.logs.length - C.MAX_LOGS);
   if (severity !== 'INFO' && s.activeTab !== 'LOGS') s.badges.LOGS += 1;
+}
+
+export function addEvent(s: GameState, e: Omit<TimelineEvent, 'tick'>) {
+  s.timeline.push({ tick: s.tick, ...e });
 }
 
 export const nodeList = (s: GameState): DistrictNode[] => DISTRICT_ORDER.map((id) => s.nodes[id]);
@@ -153,6 +158,8 @@ export function createInitialState(
     nextHazardInSec: C.FIRST_HAZARD_SEC,
     logs: [],
     logCounter: 0,
+    history: [],
+    timeline: [],
     badges: { GRID: 0, FOCUS: 0, LOGS: 0, DEDUCT: 0 },
     playerRole: 'PLAYER',
     playerNodeId: null,
@@ -197,6 +204,8 @@ export function createInitialState(
         tacticUntilTick: 0,
         nextTacticTick: 20 + Math.floor(rng() * 20),
         coolantReadyTick: 0,
+        tacticParam: 0,
+        lastReportTick: 0,
         scanStatus: 'UNSCANNED',
         flagged: false,
         isolated: false,
@@ -243,6 +252,7 @@ function spawnHazard(s: GameState, rng: () => number) {
     addLog(s, 'WARN', 'HAZARD', 'WEATHER', `HEATWAVE over ${nodeName(s, target.id)}: cooling degraded for 15s`, target.id);
   }
   s.hazards.push(h);
+  addEvent(s, { kind: 'HAZARD', label: `${h.type.replace('_', ' ')} @ ${nodeName(s, target.id)}`, nodeId: target.id });
 }
 
 // ---------------------------------------------------------------------------
@@ -260,19 +270,28 @@ function runEngineer(s: GameState, e: AIEngineer, rng: () => number) {
       e.nextTacticTick = s.tick + Math.round((18 + Math.floor(rng() * 14)) * DIFFICULTY[s.difficulty].saboteurGap);
     } else if (!e.activeTactic && s.tick >= e.nextTacticTick) {
       e.activeTactic = pick(rng, e.tactics);
+      e.tacticParam = rng();
       e.tacticUntilTick = s.tick + 8 + Math.floor(rng() * 5);
+      addEvent(s, { kind: 'TACTIC', label: `${e.callsign} began ${e.activeTactic.replace('_', ' ')}`, nodeId: n.id, engineerId: e.id, secret: true });
       if (e.activeTactic === 'FAKE_OVERLOAD') {
+        // Half the time the false alarm frames a neighbour instead of the saboteur's own district.
+        const others = nodeList(s).filter((x) => isOnline(x) && x.id !== n.id);
+        const framed = rng() < 0.5 && others.length ? pick(rng, others) : n;
         const pct = 112 + Math.floor(rng() * 18);
-        addLog(s, 'WARN', 'ALARM', e.callsign, `${e.callsign} reports OVERLOAD on ${nodeName(s, n.id)}: load ${pct}% — requesting extra allocation`, n.id);
+        addLog(s, 'WARN', 'ALARM', e.callsign, `${e.callsign} reports OVERLOAD on ${nodeName(s, framed.id)}: load ${pct}% — requesting extra allocation`, framed.id);
       }
     }
+  } else if (n.temperature >= 88 && s.tick - e.lastReportTick > 15) {
+    // Honest engineers raise genuine alarms, so alarms alone are not proof of sabotage.
+    e.lastReportTick = s.tick;
+    addLog(s, 'WARN', 'ALARM', e.callsign, `${e.callsign} reports OVERLOAD on ${nodeName(s, n.id)}: load ${Math.round((n.supply / n.capacity) * 100)}% — ${Math.round(n.temperature)}°C`, n.id);
   }
 
   // Allocation
   let target = Math.min(n.capacity, Math.ceil(n.demand) + 1);
-  if (sab && e.activeTactic === 'UNDER_SUPPLY') target = Math.floor(n.demand * 0.88);
-  if (sab && e.activeTactic === 'DELAY_COOLANT') target = Math.floor(n.demand * 0.95);
-  if (sab && e.activeTactic === 'FAKE_OVERLOAD') target = Math.min(n.capacity, Math.ceil(n.demand * 1.18));
+  if (sab && e.activeTactic === 'UNDER_SUPPLY') target = Math.floor(n.demand * (0.9 + e.tacticParam * 0.05));
+  if (sab && e.activeTactic === 'DELAY_COOLANT') target = Math.floor(n.demand * 0.96);
+  if (sab && e.activeTactic === 'FAKE_OVERLOAD') target = Math.min(n.capacity, Math.ceil(n.demand * (1.1 + e.tacticParam * 0.08)));
 
   if (Math.abs(n.supply - target) >= 6 && rng() < 0.7) {
     const want = target - n.supply;
@@ -287,8 +306,12 @@ function runEngineer(s: GameState, e: AIEngineer, rng: () => number) {
   // Coolant
   if (n.temperature < 78) e.coolantReadyTick = 0;
   if (n.temperature >= 78 && !n.coolantActive && n.coolantCooldown <= 0 && computeReserve(s) >= C.COOLANT_COST_MW && rng() < 0.8) {
-    if (sab && e.activeTactic === 'DELAY_COOLANT' && e.coolantReadyTick === 0) e.coolantReadyTick = s.tick + 6;
-    if (!(sab && s.tick < e.coolantReadyTick)) {
+    if (e.coolantReadyTick === 0) {
+      // Saboteurs stall deliberately; honest engineers occasionally lag by a second or two (red herring).
+      const delay = sab && e.activeTactic === 'DELAY_COOLANT' ? 6 + Math.floor(rng() * 3) : rng() < 0.15 ? 1 + Math.floor(rng() * 3) : 0;
+      e.coolantReadyTick = s.tick + delay;
+    }
+    if (s.tick >= e.coolantReadyTick) {
       n.coolantActive = true;
       n.coolantRemaining = C.COOLANT_DURATION;
       n.coolantCooldown = C.COOLANT_COOLDOWN;
@@ -298,19 +321,27 @@ function runEngineer(s: GameState, e: AIEngineer, rng: () => number) {
   }
 }
 
+const SCAN_HINT: Record<SaboteurTactic, string> = {
+  UNDER_SUPPLY: 'allocation trails measured demand',
+  DELAY_COOLANT: 'coolant response latency above protocol',
+  FAKE_OVERLOAD: 'alarm reports do not match district sensors',
+};
+
 function resolveScan(s: GameState, n: DistrictNode, rng: () => number) {
   const e = s.engineers.find((x) => x.nodeId === n.id);
   if (!e) return;
   const acc = DIFFICULTY[s.difficulty].scanAccuracy;
   const anomaly = e.role === 'SABOTEUR' && !e.isolated ? rng() < acc : rng() < (1 - acc) / 2;
   e.scanStatus = anomaly ? 'ANOMALY' : 'CLEAN';
+  const hintTactic = e.tactics.length ? pick(rng, e.tactics) : pick(rng, Object.keys(SCAN_HINT) as SaboteurTactic[]);
+  addEvent(s, { kind: 'SCAN', label: `Scan of ${e.callsign}: ${anomaly ? 'ANOMALY' : 'clean'} (actually ${e.role === 'SABOTEUR' && !e.isolated ? 'saboteur' : 'innocent'})`, nodeId: n.id, engineerId: e.id });
   addLog(
     s,
     anomaly ? 'WARN' : 'INFO',
     'SCAN',
     'DIAG',
     anomaly
-      ? `DIAG ${e.callsign}: ANOMALY — control signature deviates from protocol`
+      ? `DIAG ${e.callsign}: ANOMALY — ${SCAN_HINT[hintTactic]}`
       : `DIAG ${e.callsign}: nominal — no deviation detected`,
     n.id,
   );
@@ -393,6 +424,7 @@ export function tickGame(prev: GameState): GameState {
     n.redistributedLoad = 0;
     n.coolantActive = false;
     s.blackoutCount += 1;
+    addEvent(s, { kind: 'BLACKOUT', label: `${nodeName(s, n.id)} blackout`, nodeId: n.id });
     const targets = n.adjacent.map((id) => s.nodes[id]).filter(isOnline);
     if (targets.length) {
       const share = shed / targets.length;
@@ -440,6 +472,12 @@ export function tickGame(prev: GameState): GameState {
   s.stats.healthSum += s.gridHealth;
   s.stats.minHealth = Math.min(s.stats.minHealth, s.gridHealth);
   s.stats.peakTemp = Math.max(s.stats.peakTemp, ...nodeList(s).map((n) => n.temperature));
+  s.history.push({
+    tick: s.tick,
+    health: s.gridHealth,
+    temps: nodeList(s).map((n) => Math.round(n.temperature)),
+    down: nodeList(s).reduce((m, n, i) => (n.status === 'BLACKOUT' || n.isolated ? m | (1 << i) : m), 0),
+  });
   s.badges.GRID = nodeList(s).filter((n) => n.status === 'CRITICAL' || n.status === 'BLACKOUT').length;
   s.badges.FOCUS = ['CRITICAL', 'BLACKOUT'].includes(s.nodes[s.selectedNodeId].status) ? 1 : 0;
   if (s.activeTab === 'LOGS') s.badges.LOGS = 0;
@@ -590,6 +628,7 @@ export function voteIsolate(prev: GameState, engineerId: string): GameState {
   e.activeTactic = null;
   const correct = e.role === 'SABOTEUR';
   s.votes.push({ engineerId, correct, tick: s.tick });
+  addEvent(s, { kind: 'VOTE', label: `Voted out ${e.callsign} — ${correct ? 'saboteur' : 'innocent'}`, nodeId: e.nodeId, engineerId });
   const n = s.nodes[e.nodeId];
   if (correct) {
     addLog(s, 'INFO', 'VOTE', 'COMMAND', `VOTE PASSED: ${e.callsign} confirmed SABOTEUR. ${nodeName(s, n.id)} reverted to autopilot.`, n.id);

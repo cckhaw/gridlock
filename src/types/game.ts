@@ -116,6 +116,27 @@ export interface TelemetryLog {
 export type SaboteurTactic = 'UNDER_SUPPLY' | 'DELAY_COOLANT' | 'FAKE_OVERLOAD';
 export type ScanStatus = 'UNSCANNED' | 'SCANNING' | 'CLEAN' | 'ANOMALY';
 
+export interface HistoryPoint {
+  tick: number;
+  health: number;
+  /** Rounded °C per district, in DISTRICT_ORDER. */
+  temps: number[];
+  /** Bitmask (DISTRICT_ORDER) of blacked-out / isolated districts. */
+  down: number;
+}
+
+export type TimelineKind = 'HAZARD' | 'BLACKOUT' | 'TACTIC' | 'SCAN' | 'VOTE' | 'COOLANT';
+
+export interface TimelineEvent {
+  tick: number;
+  kind: TimelineKind;
+  label: string;
+  nodeId?: DistrictId;
+  engineerId?: string;
+  /** Only shown in the post-game replay. */
+  secret?: boolean;
+}
+
 export interface AIEngineer {
   id: string;
   callsign: string;
@@ -127,6 +148,9 @@ export interface AIEngineer {
   tacticUntilTick: number;
   nextTacticTick: number;
   coolantReadyTick: number;
+  /** Per-activation randomness (0–1) so tactics aren't identical each time. */
+  tacticParam: number;
+  lastReportTick: number;
   scanStatus: ScanStatus;
   /** Player-set suspect marker. */
   flagged: boolean;
@@ -173,6 +197,8 @@ export interface GameState {
 
   logs: TelemetryLog[];
   logCounter: number;
+  history: HistoryPoint[];
+  timeline: TimelineEvent[];
   badges: Record<ActiveTab, number>;
 
   playerRole: PlayerRole;

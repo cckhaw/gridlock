@@ -1,5 +1,6 @@
 import { Radio, Siren, Users } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Replay from './Replay';
 import { DIFFICULTY } from '../engine/constants';
 import { computeScore } from '../engine/score';
 import { bestKey, useGame } from '../store/useGame';
@@ -58,12 +59,14 @@ export function EndScreen() {
   const toMenu = useGame((s) => s.toMenu);
   const start = useGame((s) => s.start);
   const win = g.phase === 'VICTORY';
+  const [replay, setReplay] = useState(false);
   const score = useMemo(() => computeScore(g), [g]);
   const recordScore = useGame((s) => s.recordScore);
   const best = useGame((s) => s.best[bestKey(g.mode, g.difficulty)] ?? 0);
   useEffect(() => { recordScore(score.total); }, [score.total, recordScore]);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scada-bg/90 p-5">
+    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-scada-bg/90 p-5">
+      {replay && <Replay onClose={() => setReplay(false)} />}
       <div className={`scada-panel w-full max-w-md border p-5 ${win ? 'border-scada-mint shadow-glow-mint' : 'border-scada-crimson shadow-glow-crimson'}`}>
         <h2 className={`text-2xl font-bold ${win ? 'text-scada-mint text-glow-mint' : 'text-scada-crimson text-glow-crimson'}`}>{win ? 'GRID SECURED' : 'GRID FAILURE'}</h2>
         <p className="mt-1 text-xs text-scada-dim">{g.endReason}</p>
@@ -98,6 +101,7 @@ export function EndScreen() {
         )}
         <div className="flex gap-2">
           <button className="touch-target h-12 flex-1 rounded border border-scada-cobalt text-xs font-bold text-scada-cobalt" onClick={() => start(g.mode)}>RETRY</button>
+          <button className="touch-target h-12 flex-1 rounded border border-scada-amber text-xs font-bold text-scada-amber" onClick={() => setReplay(true)}>REPLAY</button>
           <button className="touch-target h-12 flex-1 rounded border border-scada-border text-xs font-bold" onClick={toMenu}>MENU</button>
         </div>
       </div>
