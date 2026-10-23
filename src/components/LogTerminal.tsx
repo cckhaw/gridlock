@@ -20,7 +20,7 @@ export default function LogTerminal() {
         const el = e.currentTarget;
         stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
       }}
-      className="h-full min-h-48 overflow-y-auto rounded border border-scada-border bg-black/60 p-2 text-[12px] leading-5"
+      className="h-full min-h-48 overflow-y-auto rounded-xl border border-scada-border bg-black/60 p-2 font-mono text-[12px] leading-5"
       role="log"
     >
       {logs.map((l) => (

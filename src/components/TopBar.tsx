@@ -12,13 +12,13 @@ export default function TopBar() {
   const reserve = useGame((s) => s.g.reserveMW);
   const { toggleMute, toggleCrt, togglePause } = useGame.getState();
   const color = healthColor(health);
-  const btn = 'touch-target flex items-center justify-center rounded border border-scada-border bg-scada-panel text-scada-text';
+  const btn = 'touch-target flex items-center justify-center rounded-xl border border-scada-border bg-scada-panel text-scada-text';
 
   return (
     <header className="pt-safe flex shrink-0 items-center gap-1.5 border-b xs:gap-2 border-scada-border bg-scada-panel px-3 py-2">
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between text-[11px] text-scada-dim">
-          <span className="whitespace-nowrap">GRID HEALTH</span>
+          <span className="whitespace-nowrap">CITY POWER</span>
           <span style={{ color }} className="font-bold">{health}%</span>
         </div>
         <div className="h-3 overflow-hidden rounded bg-scada-border">
@@ -27,9 +27,9 @@ export default function TopBar() {
             style={{ width: `${health}%`, backgroundColor: color, boxShadow: `0 0 10px ${color}` }}
           />
         </div>
-        <div className="mt-0.5 text-[10px] text-scada-dim">RESERVE <span className="text-scada-cobalt">{reserve} MW</span></div>
+        <div className="mt-0.5 text-[10px] text-scada-dim">Spare power <span className="text-scada-cobalt">{reserve} MW</span></div>
       </div>
-      <div className={`font-bold tabular-nums text-xl xs:text-2xl ${time <= 30 ? 'text-scada-crimson text-glow-crimson' : 'text-scada-mint text-glow-mint'}`}>
+      <div className={`font-mono font-bold tabular-nums text-xl xs:text-2xl ${time <= 30 ? 'text-scada-crimson text-glow-crimson' : 'text-scada-mint text-glow-mint'}`}>
         {fmtTime(time)}
       </div>
       <button className={btn} onClick={togglePause} aria-label={paused ? 'Resume' : 'Pause'}>

@@ -49,8 +49,8 @@ export default function DeductPanel() {
   if (g.mode !== 'SABOTEUR_DEDUCTION') {
     return (
       <div className="scada-panel flex flex-col gap-2 p-3 text-xs">
-        <div className="flex items-center gap-2 font-bold text-scada-cobalt"><ScanSearch size={18} />SOLO CRISIS</div>
-        <p className="text-scada-dim">No saboteurs on this shift. Hazard feed:</p>
+        <div className="flex items-center gap-2 font-bold text-scada-cobalt"><ScanSearch size={18} />Storm watch</div>
+        <p className="text-scada-dim">Active storm hazards:</p>
         {g.hazards.length === 0 && <div className="text-scada-mint">All quiet — next hazard in ≤{g.nextHazardInSec}s</div>}
         {g.hazards.map((h) => (
           <div key={h.id} className="text-scada-amber">⚠ {h.type.replace('_', ' ')} @ {g.nodes[h.targetNodeId].shortName} · {h.remainingSec}s</div>

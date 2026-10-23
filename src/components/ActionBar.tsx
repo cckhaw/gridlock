@@ -21,7 +21,7 @@ function Btn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`touch-target flex h-14 ${vertical ? 'w-24 flex-none' : 'flex-1'} flex-col items-center justify-center rounded border bg-scada-bg text-[11px] font-bold disabled:opacity-35 ${tones[tone]} ${
+      className={`touch-target flex h-14 ${vertical ? 'w-24 flex-none' : 'flex-1'} flex-col items-center justify-center rounded-xl border bg-scada-bg/80 text-[11px] font-bold disabled:opacity-35 ${tones[tone]} ${
         armed ? 'animate-alarm-pulse bg-scada-crimson/20' : ''
       }`}
     >
@@ -64,12 +64,12 @@ export default function ActionBar({ className = '', vertical = false }: { classN
   }
 
   const isoOk = deduction ? !!eng && !eng.isolated : own && node.status !== 'BLACKOUT';
-  const isoLabel = deduction ? (armed ? 'CONFIRM' : 'VOTE OUT') : node.isolated ? 'RECONNECT' : 'ISOLATE';
+  const isoLabel = deduction ? (armed ? 'Confirm?' : 'Vote out') : node.isolated ? 'Reconnect' : 'Cut off';
 
   return (
     <div className={`flex gap-2 bg-scada-panel/95 p-2 ${vertical ? 'flex-col justify-center border-l' : 'border-t'} border-scada-border ${className}`}>
-      <Btn vertical={vertical} Icon={Route} label="REROUTE" sub="+60MW" tone="cobalt" disabled={!own || !online} onClick={() => act('REROUTE')} />
-      <Btn vertical={vertical} Icon={Snowflake} label="COOLANT" sub={coolSub} tone="mint" disabled={!coolOk} onClick={() => act('COOLANT')} />
+      <Btn vertical={vertical} Icon={Route} label="Divert" sub="+60 MW" tone="cobalt" disabled={!own || !online} onClick={() => act('REROUTE')} />
+      <Btn vertical={vertical} Icon={Snowflake} label="Cool down" sub={coolSub} tone="mint" disabled={!coolOk} onClick={() => act('COOLANT')} />
       <Btn
         vertical={vertical}
         Icon={deduction ? Ban : Unplug} label={isoLabel} tone="crimson" armed={armed} disabled={!isoOk}
@@ -80,7 +80,7 @@ export default function ActionBar({ className = '', vertical = false }: { classN
           if (eng) vote(eng.id);
         }}
       />
-      <Btn vertical={vertical} Icon={ScanSearch} label="DIAGNOSE" sub={diagSub} tone="amber" disabled={!diagOk} onClick={() => act('DIAGNOSTIC')} />
+      <Btn vertical={vertical} Icon={ScanSearch} label="Inspect" sub={diagSub} tone="amber" disabled={!diagOk} onClick={() => act('DIAGNOSTIC')} />
     </div>
   );
 }

@@ -35,6 +35,7 @@ export default {
         },
       },
       fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'],
         mono: [
           '"Fira Code"',
           '"Share Tech Mono"',
@@ -88,6 +89,11 @@ export default {
           '100%': { transform: 'translateY(100%)' },
         },
         'blink-caret': { '50%': { opacity: '0' } },
+        'pop-in': {
+          '0%': { transform: 'translateY(8px) scale(0.6)', opacity: '0' },
+          '70%': { transform: 'translateY(-2px) scale(1.06)', opacity: '1' },
+          '100%': { transform: 'translateY(0) scale(1)', opacity: '1' },
+        },
       },
       animation: {
         'flow-forward': 'flow-forward 0.8s linear infinite',
@@ -97,6 +103,7 @@ export default {
         flicker: 'flicker 6s linear infinite',
         'scan-roll': 'scan-roll 7s linear infinite',
         caret: 'blink-caret 1s steps(1) infinite',
+        'pop-in': 'pop-in 0.35s cubic-bezier(.2,1.4,.4,1) both',
       },
       transitionTimingFunction: { gauge: 'linear' },
     },
@@ -118,7 +125,7 @@ export default {
           margin: '0',
           overscrollBehavior: 'none',
           WebkitTapHighlightColor: 'transparent',
-          fontFamily: '"Fira Code", "Share Tech Mono", ui-monospace, monospace',
+          fontFamily: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
         },
       });
 
@@ -148,9 +155,10 @@ export default {
 
         // Panels and touch targets
         '.scada-panel': {
-          backgroundColor: '#131B2E',
-          border: '1px solid #1E293B',
-          borderRadius: '0.5rem',
+          backgroundColor: 'rgba(19,27,46,0.82)',
+          border: '1px solid rgba(148,163,184,0.16)',
+          borderRadius: '1rem',
+          backdropFilter: 'blur(8px)',
         },
         '.touch-target': {
           minHeight: '48px',

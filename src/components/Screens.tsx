@@ -30,9 +30,9 @@ export function MenuScreen() {
   return (
     <main className="pt-safe pb-safe mx-auto flex min-h-full max-w-md flex-col gap-4 p-5 before:flex-1 before:content-[''] after:flex-1 after:content-['']">
       <div>
-        <div className="flex items-center gap-2 text-scada-mint"><Radio size={20} /><span className="text-[11px]">SCADA // GRID CONTROL</span></div>
-        <h1 className="text-3xl font-bold text-scada-mint text-glow-mint">BLACKOUT<br />PROTOCOL</h1>
-        <p className="mt-2 text-xs text-scada-dim">Eight districts. Five minutes. Keep supply matched to demand, flush heat before integrity fails, and stop the cascade.</p>
+        <div className="flex items-center gap-2 text-scada-mint"><Radio size={20} /><span className="text-[11px]">CITY POWER CONTROL</span></div>
+        <h1 className="text-4xl font-extrabold tracking-tight text-scada-mint text-glow-mint">Blackout<br />Protocol</h1>
+        <p className="mt-2 text-xs text-scada-dim">A storm is rolling over the city. Keep eight districts powered for five minutes — match power to demand, cool what overheats, and stop blackouts from spreading.</p>
       </div>
       <div>
         <div className="mb-1 text-[11px] text-scada-dim">DIFFICULTY</div>
