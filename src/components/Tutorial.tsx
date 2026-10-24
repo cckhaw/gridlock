@@ -37,8 +37,9 @@ function soloSteps(): Step[] {
       title: 'The repair loop',
       lead: 'Pick up, then deliver — every time something goes wrong.',
       bullets: [
-        '1. Drive into the YELLOW ring at the depot to load a repair kit.',
-        '2. Drive into the GREEN beam on the district that is in trouble.',
+        '1. Follow the yellow arrow to the DEPOT and drive into the yellow ring to load a repair kit.',
+        '2. Follow the green arrow to the district in trouble. It is the one with the alert pop-up, a bobbing marker and a tall green beam; the banner names it, and the minimap shows it as a pulsing green box.',
+        'A floating green arrow above your truck and an on-screen pointer (“Deliver here · District name”) always show which way to go.',
         'A kit heals 25% condition, cools 20°C, clears hazards there and re-tops its power. Delivering to a dark district restores it.',
         'You earn credits for each repair. A new kit is ready 8 seconds later.',
       ],

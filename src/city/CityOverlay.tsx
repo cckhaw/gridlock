@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { currentObjective } from '../engine/sim';
 import { DISTRICT_ORDER } from '../engine/constants';
 import { useGame } from '../store/useGame';
 import type { DistrictId, NodeStatus } from '../types/game';
@@ -85,5 +86,24 @@ export function CityAlerts() {
         );
       })}
     </>
+  );
+}
+
+/** On-screen waypoint: a pill above the target when visible, an edge arrow when it is off-screen. */
+export function TargetPointer() {
+  const g = useGame((st) => st.g);
+  const o = useMemo(() => currentObjective(g), [g]);
+  if (o.kind !== 'DELIVER' && o.kind !== 'PICKUP') return null;
+  const deliver = o.kind === 'DELIVER' && o.targetNodeId;
+  const label = deliver ? g.nodes[o.targetNodeId!].name : 'Repair depot';
+  const color = deliver ? '#30d158' : '#ffd60a';
+  return (
+    <div data-pointer className="absolute left-0 top-0 will-change-transform" style={{ visibility: 'hidden' }}>
+      <div className="glass flex items-center gap-2 rounded-full py-1.5 pl-2.5 pr-3.5 text-[13px] font-semibold text-white" style={{ borderColor: color }}>
+        <span data-arrow className="inline-block text-[16px] leading-none" style={{ color }}>▶</span>
+        <span>{deliver ? 'Deliver here · ' : 'Pick up · '}{label}</span>
+        <span data-dist className="tabular-nums text-white/60" />
+      </div>
+    </div>
   );
 }

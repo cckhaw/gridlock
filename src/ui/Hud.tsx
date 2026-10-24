@@ -41,7 +41,7 @@ export function ObjectiveCard() {
 
 const GOALS: [keyof PracticeState['done'], string][] = [
   ['kit', 'Load a repair kit at the yellow depot'],
-  ['deliver', 'Deliver it to a green-beam district'],
+  ['deliver', 'Deliver it to the district the green arrow points to'],
   ['slider', 'Move a power slider (Autopilot off)'],
   ['cool', 'Press Cool down on a hot district'],
   ['divert', 'Press Divert'],
