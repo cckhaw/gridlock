@@ -310,7 +310,11 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
     const target = new THREE.Vector3(0, 0.5, 0);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.copy(target);
-    controls.enablePan = false;
+    controls.enablePan = true;
+    controls.screenSpacePanning = false;
+    controls.panSpeed = 1.1;
+    controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+    controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
     controls.enableDamping = true;
     controls.rotateSpeed = 0.55;
     controls.minPolarAngle = 0.3;
@@ -320,9 +324,48 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
     controls.minDistance = 14;
     controls.maxDistance = 70;
     let interacted = false;
+    let skipFit = false;
     controls.addEventListener('start', () => {
       interacted = true;
     });
+
+    // Free camera: pan around the city with a finger / mouse drag or the arrow keys.
+    const fwd = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+    const moveGround = (rightAmt: number, fwdAmt: number) => {
+      camera.getWorldDirection(fwd);
+      fwd.y = 0;
+      fwd.normalize();
+      right.crossVectors(fwd, up).normalize();
+      const mx = right.x * rightAmt + fwd.x * fwdAmt;
+      const mz = right.z * rightAmt + fwd.z * fwdAmt;
+      camera.position.x += mx;
+      camera.position.z += mz;
+      controls.target.x += mx;
+      controls.target.z += mz;
+    };
+    const clampTarget = () => {
+      const cx = Math.max(-17, Math.min(17, controls.target.x));
+      const cz = Math.max(-13, Math.min(13, controls.target.z));
+      camera.position.x += cx - controls.target.x;
+      camera.position.z += cz - controls.target.z;
+      controls.target.x = cx;
+      controls.target.z = cz;
+    };
+    /** Leave the truck-follow camera without a jump. */
+    const enterFree = () => {
+      controls.target.set(truck.x + Math.sin(truck.heading) * 4, 0.3, truck.z + Math.cos(truck.heading) * 4);
+      interacted = true;
+      skipFit = true;
+      useGame.setState({ cityView: 'OVERVIEW' });
+      controls.update();
+    };
+    const panPixels = (dx: number, dy: number) => {
+      const dist = camera.position.distanceTo(controls.target);
+      const k = (2 * dist * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(1, el.clientHeight);
+      moveGround(-dx * k, dy * k);
+    };
 
     const fit = () => {
       const w = el.clientWidth || 300;
@@ -350,10 +393,27 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
     const ray = new THREE.Raycaster();
     const ndc = new THREE.Vector2();
     let down: { x: number; y: number; t: number } | null = null;
+    let drag: { x: number; y: number; manual: boolean } | null = null;
     const onDown = (e: PointerEvent) => {
       down = { x: e.clientX, y: e.clientY, t: performance.now() };
+      drag = { x: e.clientX, y: e.clientY, manual: false };
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!drag || !down) return;
+      // In the truck-follow camera OrbitControls is off, so the first drag switches to the free camera and pans it.
+      if (useGame.getState().cityView === 'CHASE' && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 8) {
+        enterFree();
+        drag.manual = true;
+      }
+      if (drag.manual) {
+        panPixels(e.clientX - drag.x, e.clientY - drag.y);
+        clampTarget();
+      }
+      drag.x = e.clientX;
+      drag.y = e.clientY;
     };
     const onUp = (e: PointerEvent) => {
+      drag = null;
       if (!down) return;
       const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
       const quick = performance.now() - down.t < 600;
@@ -369,6 +429,7 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
     };
     renderer.domElement.addEventListener('pointerdown', onDown);
     renderer.domElement.addEventListener('pointerup', onUp);
+    renderer.domElement.addEventListener('pointermove', onMove);
 
     // Frame loop
     const tmp = new THREE.Vector3();
@@ -628,8 +689,21 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
       }
       const chase = gs.cityView === 'CHASE';
       if (chase !== (lastView === 'CHASE')) {
-        interacted = false;
-        if (!chase) fit();
+        if (skipFit) skipFit = false;
+        else {
+          interacted = false;
+          if (!chase) fit();
+        }
+      }
+      // Arrow keys pan the camera (and leave truck-follow if needed)
+      const pk = truck.keys;
+      const ax = (pk.has('ArrowRight') ? 1 : 0) - (pk.has('ArrowLeft') ? 1 : 0);
+      const az = (pk.has('ArrowUp') ? 1 : 0) - (pk.has('ArrowDown') ? 1 : 0);
+      if ((ax || az) && running) {
+        if (gs.cityView === 'CHASE') enterFree();
+        const sp = Math.max(8, camera.position.distanceTo(controls.target) * 0.75) * dt;
+        moveGround(ax * sp, az * sp);
+        clampTarget();
       }
       lastView = gs.cityView;
       const wantFov = chase ? (camera.aspect < 0.8 ? 50 : 44) : 36;
@@ -648,6 +722,7 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
         camera.lookAt(truck.x + fx * 4, 0.3, truck.z + fz * 4);
       } else {
         controls.update();
+        clampTarget();
       }
       renderer.render(scene, camera);
 
@@ -669,6 +744,7 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
       ro.disconnect();
       renderer.domElement.removeEventListener('pointerdown', onDown);
       renderer.domElement.removeEventListener('pointerup', onUp);
+      renderer.domElement.removeEventListener('pointermove', onMove);
       window.removeEventListener('keydown', kd);
       window.removeEventListener('keyup', ku);
       truck.keys.clear();

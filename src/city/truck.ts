@@ -29,10 +29,11 @@ export function readInput(): { steer: number; throttle: number } {
   const k = truck.keys;
   let steer = truck.stick.x;
   let throttle = truck.stick.y;
-  if (k.has('KeyA') || k.has('ArrowLeft')) steer -= 1;
-  if (k.has('KeyD') || k.has('ArrowRight')) steer += 1;
-  if (k.has('KeyW') || k.has('ArrowUp')) throttle += 1;
-  if (k.has('KeyS') || k.has('ArrowDown')) throttle -= 1;
+  // W A S D drive; the arrow keys pan the camera (see CityScene)
+  if (k.has('KeyA')) steer -= 1;
+  if (k.has('KeyD')) steer += 1;
+  if (k.has('KeyW')) throttle += 1;
+  if (k.has('KeyS')) throttle -= 1;
   return { steer: Math.max(-1, Math.min(1, steer)), throttle: Math.max(-1, Math.min(1, throttle)) };
 }
 
