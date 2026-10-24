@@ -7,6 +7,7 @@ import { bestKey, useGame } from '../store/useGame';
 import type { Difficulty, GameMode } from '../types/game';
 
 const MODES: { mode: GameMode; title: string; goal: string }[] = [
+  { mode: 'PRACTICE', title: 'Practice', goal: 'No timer, no losing. Learn to drive, deliver repair kits and balance power at your own pace, with a checklist to guide you.' },
   { mode: 'SOLO_CRISIS', title: 'Solo Crisis', goal: 'Run all 8 districts through a 5-minute storm. Drive the repair truck, balance power, keep fewer than 4 districts dark.' },
   { mode: 'SABOTEUR_DEDUCTION', title: 'Find the Saboteurs', goal: 'Run 1 district beside 7 AI engineers. Two are saboteurs — read the news, inspect, and vote both out.' },
 ];
@@ -33,7 +34,7 @@ export function MenuScreen() {
   const setDifficulty = useGame((s) => s.setDifficulty);
   const best = useGame((s) => s.best);
   const pwa = useInstall();
-  const [mi, setMi] = useState(0);
+  const [mi, setMi] = useState(() => (Object.keys(useGame.getState().best).length === 0 ? 0 : 1));
   const diffs = Object.keys(DIFFICULTY) as Difficulty[];
   const m = MODES[mi];
   const coarse = window.matchMedia('(pointer: coarse)').matches;
@@ -48,13 +49,13 @@ export function MenuScreen() {
 
       <Picker label="Mode" value={m.title} onPrev={() => setMi((mi + MODES.length - 1) % MODES.length)} onNext={() => setMi((mi + 1) % MODES.length)} />
       <p className="-mt-2 text-xs text-white/70">{m.goal}</p>
-      <Picker
+      {m.mode !== 'PRACTICE' && <><Picker
         label="Difficulty"
         value={difficulty}
         onPrev={() => setDifficulty(diffs[(diffs.indexOf(difficulty) + diffs.length - 1) % diffs.length])}
         onNext={() => setDifficulty(diffs[(diffs.indexOf(difficulty) + 1) % diffs.length])}
       />
-      <p className="-mt-2 text-xs text-white/70">{DIFFICULTY[difficulty].blurb}</p>
+      <p className="-mt-2 text-xs text-white/70">{DIFFICULTY[difficulty].blurb}</p></>}
 
       <button onClick={() => start(m.mode)} className="touch-target h-14 rounded-xl bg-scada-mint font-hud text-2xl font-bold uppercase tracking-widest text-scada-bg shadow-glow-mint">
         Start
@@ -63,7 +64,14 @@ export function MenuScreen() {
 
       <section className="rounded-2xl border border-white/10 bg-black/35 p-3 text-xs leading-5 text-white/80">
         <div className="mb-1 font-hud text-sm font-bold uppercase tracking-widest text-scada-cobalt">How to play</div>
-        {m.mode === 'SOLO_CRISIS' ? (
+        {m.mode === 'PRACTICE' ? (
+          <ul className="space-y-1">
+            <li>🎓 <b>No timer and you cannot lose.</b> Explore freely.</li>
+            <li>🟡 Drive into the yellow depot ring, then 🟢 the green beam on a district that needs help.</li>
+            <li>⚡ In DISTRICT, drag the power slider; switch Autopilot off to do it yourself.</li>
+            <li>⛈ Use <b>Trigger storm</b> to see hazards, then fix them.</li>
+          </ul>
+        ) : m.mode === 'SOLO_CRISIS' ? (
           <ul className="space-y-1">
             <li>🎯 <b>Goal:</b> survive until 0:00 with fewer than 4 districts blacked out.</li>
             <li>🟡 Pick up a repair kit at the <b>yellow</b> depot ring.</li>

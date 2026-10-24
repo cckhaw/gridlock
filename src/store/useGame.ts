@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { sound, vibrate } from '../audio/synth';
 import { resetTruck } from '../city/truck';
-import { applyAction, createInitialState, deliverKit, pickupKit, tickGame, voteIsolate } from '../engine/sim';
-import type { ActionType, ActiveTab, Difficulty, DistrictId, GameMode, GameSettings, GameState } from '../types/game';
+import { applyAction, createInitialState, deliverKit, pickupKit, setAssist, setPracticeHazards, tickGame, triggerHazard, voteIsolate } from '../engine/sim';
+import type { ActionType, ActiveTab, Assist, Difficulty, DistrictId, GameMode, GameSettings, GameState, TimeOfDay } from '../types/game';
 
 const SETTINGS_KEY = 'blackout-protocol:settings';
 
 function loadSettings(): GameSettings {
-  const def: GameSettings = { crtScanlines: true, muted: false, haptics: true };
+  const def: GameSettings = { crtScanlines: false, muted: false, haptics: true, timeOfDay: 'AUTO' };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     return raw ? { ...def, ...JSON.parse(raw) } : def;
@@ -69,6 +69,11 @@ function markTutorialSeen(mode: GameMode) {
 interface Store {
   g: GameState;
   tutorialOpen: boolean;
+  patchAssist: (a: Partial<Assist>) => void;
+  practiceHazards: (on: boolean) => void;
+  strike: () => void;
+  cycleTimeOfDay: () => void;
+  setTimeOfDay: (t: TimeOfDay) => void;
   cityView: 'CHASE' | 'OVERVIEW';
   toggleView: () => void;
   takeKit: () => void;
@@ -104,6 +109,27 @@ sound.setMuted(initialSettings.muted);
 export const useGame = create<Store>((set, get) => ({
   g: menuState(initialSettings),
   tutorialOpen: false,
+  patchAssist: (a) => set({ g: setAssist(get().g, a) }),
+  practiceHazards: (on) => set({ g: setPracticeHazards(get().g, on) }),
+  strike: () => {
+    const g = get().g;
+    const next = triggerHazard(g);
+    if (next !== g) {
+      sound.hazard();
+      set({ g: next });
+    }
+  },
+  setTimeOfDay: (t) => {
+    const g = get().g;
+    const settings = { ...g.settings, timeOfDay: t };
+    saveSettings(settings);
+    set({ g: { ...g, settings } });
+  },
+  cycleTimeOfDay: () => {
+    const order: TimeOfDay[] = ['AUTO', 'DAY', 'NIGHT'];
+    const cur = get().g.settings.timeOfDay;
+    get().setTimeOfDay(order[(order.indexOf(cur) + 1) % order.length]);
+  },
   cityView: 'CHASE',
   toggleView: () => set({ cityView: get().cityView === 'CHASE' ? 'OVERVIEW' : 'CHASE' }),
   takeKit: () => {

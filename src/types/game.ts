@@ -2,7 +2,9 @@
  * Blackout Protocol — shared type definitions.
  */
 
-export type GameMode = 'SOLO_CRISIS' | 'SABOTEUR_DEDUCTION';
+export type GameMode = 'SOLO_CRISIS' | 'SABOTEUR_DEDUCTION' | 'PRACTICE';
+
+export type TimeOfDay = 'DAY' | 'NIGHT' | 'AUTO';
 
 export type Difficulty = 'CADET' | 'OPERATOR' | 'VETERAN';
 
@@ -174,7 +176,21 @@ export interface CrewState {
   kitCooldown: number;
 }
 
+export interface Assist {
+  /** Autopilot keeps your districts' power matched to demand. */
+  autoBalance: boolean;
+  /** Autopilot flushes coolant when a district runs hot. */
+  autoCool: boolean;
+}
+
+export interface PracticeState {
+  /** Storm hazards strike on their own (otherwise only when you trigger them). */
+  hazards: boolean;
+  done: { kit: boolean; deliver: boolean; slider: boolean; cool: boolean; divert: boolean; hazard: boolean };
+}
+
 export interface GameSettings {
+  timeOfDay: TimeOfDay;
   crtScanlines: boolean;
   muted: boolean;
   haptics: boolean;
@@ -185,6 +201,11 @@ export interface GameState {
   difficulty: Difficulty;
   stats: RunStats;
   crew: CrewState;
+  assist: Assist;
+  /** Autopilot toggles are offered (Cadet and Practice). */
+  assistAllowed: boolean;
+  practice: PracticeState;
+  defeatBlackouts: number;
   phase: GamePhase;
   activeTab: ActiveTab;
   selectedNodeId: DistrictId;

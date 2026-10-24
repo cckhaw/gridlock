@@ -28,7 +28,7 @@ export function computeScore(s: GameState): ScoreResult {
   const win = s.phase === 'VICTORY';
   const avgHealth = s.tick > 0 ? s.stats.healthSum / s.tick : 100;
   const lines: ScoreLine[] = [
-    { label: 'Survival time', points: Math.round((s.tick / s.durationSec) * 3000) },
+    { label: 'Survival time', points: Math.round(Math.min(1, s.tick / s.durationSec) * 3000) },
     { label: 'Average grid health', points: Math.round(avgHealth * 25) },
     { label: 'Final grid health', points: Math.round(s.gridHealth * 10) },
     { label: 'Blackouts', points: -s.blackoutCount * 400 },

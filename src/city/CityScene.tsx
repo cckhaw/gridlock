@@ -1,27 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import GridMap from '../components/GridMap';
-import { GRID_EDGES, DISTRICT_ORDER } from '../engine/constants';
-import { mulberry32 } from '../engine/rng';
-import { useGame } from '../store/useGame';
-import type { DistrictId, HazardType, NodeStatus } from '../types/game';
-import { alertFromLog, type CityAlert } from './alertText';
-import { buildDistrict, PAD, windowTexture, type DistrictView } from './buildDistricts';
-import { buildTruck, DEPOT, stepTruck, truck } from './truck';
 import { sound } from '../audio/synth';
-import { crewTargets, needsHelp, currentObjective } from '../engine/sim';
+import GridMap from '../components/GridMap';
+import { DISTRICT_ORDER, GRID_EDGES } from '../engine/constants';
+import { mulberry32 } from '../engine/rng';
+import { crewTargets, currentObjective, needsHelp, progress } from '../engine/sim';
+import { useGame } from '../store/useGame';
+import type { DistrictId, GameState, HazardType, NodeStatus } from '../types/game';
+import { CityAlerts, DistrictLabels } from './CityOverlay';
 import CityHud from './CityHud';
+import { buildDistrict, PAD, type DistrictView } from './buildDistricts';
+import { animateCrewmate, buildGround, buildLamps, buildSky, buildSmoke, buildTraffic, buildTrees, lam, ROADS, type CrewMood } from './props';
+import { makeWallTextures } from './textures';
+import { buildTruck, DEPOT, stepTruck, truck } from './truck';
 
 const WORLD = { w: 24, d: 17 };
-const OK = new THREE.Color(0x00f5d4);
+const OK = new THREE.Color(0x00e5c0);
 const AMBER = new THREE.Color(0xffb703);
 const RED = new THREE.Color(0xff2a55);
 const BLUE = new THREE.Color(0x3a86ff);
-const DEAD = new THREE.Color(0x1b2230);
-const DEAD_LINE = new THREE.Color(0x2a3344);
-
-const STATUS_RANK: Record<NodeStatus, number> = { NOMINAL: 0, ISOLATED: 1, CAUTION: 2, CRITICAL: 3, BLACKOUT: 4 };
+const DEAD = new THREE.Color(0x20262f);
+const DEAD_LINE = new THREE.Color(0x4a5568);
+const RANK: Record<NodeStatus, number> = { NOMINAL: 0, ISOLATED: 1, CAUTION: 2, CRITICAL: 3, BLACKOUT: 4 };
+const MOOD: Record<NodeStatus, CrewMood> = { NOMINAL: 'CALM', CAUTION: 'WORRIED', CRITICAL: 'PANIC', BLACKOUT: 'DOWN', ISOLATED: 'ISO' };
 
 const FX: Record<HazardType, { color: number; i: number }> = {
   LIGHTNING_STRIKE: { color: 0xdfeaff, i: 40 },
@@ -30,18 +32,29 @@ const FX: Record<HazardType, { color: number; i: number }> = {
   HEATWAVE: { color: 0xff8a2a, i: 10 },
 };
 
+const smooth = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/** Target night factor 0..1 for the AUTO day/night cycle. */
+function autoNight(g: GameState): number {
+  if (g.mode === 'PRACTICE') return smooth(0.35, 0.65, 0.5 - 0.5 * Math.cos((g.tick / 240) * Math.PI * 2));
+  return smooth(0.3, 0.72, progress(g));
+}
+
 const worldPos = (px: number, py: number) => new THREE.Vector3((px - 0.5) * WORLD.w, 0, (py - 0.5) * WORLD.d);
 
 function makeBolt(x: number, z: number): THREE.Group {
   const g = new THREE.Group();
-  const mat = new THREE.MeshBasicMaterial({ color: 0xe6f0ff });
-  let prev = new THREE.Vector3(x + (Math.random() - 0.5) * 3, 20, z + (Math.random() - 0.5) * 3);
+  const mat = new THREE.MeshBasicMaterial({ color: 0xf2f7ff });
+  let prev = new THREE.Vector3(x + (Math.random() - 0.5) * 3, 22, z + (Math.random() - 0.5) * 3);
   const steps = 9;
   for (let i = 1; i <= steps; i++) {
     const k = i / steps;
-    const next = new THREE.Vector3(x + (1 - k) * (Math.random() - 0.5) * 3, 20 * (1 - k) + 0.3 * k, z + (1 - k) * (Math.random() - 0.5) * 3);
+    const next = new THREE.Vector3(x + (1 - k) * (Math.random() - 0.5) * 3, 22 * (1 - k) + 0.3 * k, z + (1 - k) * (Math.random() - 0.5) * 3);
     const len = prev.distanceTo(next);
-    const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, len, 5), mat);
+    const seg = new THREE.Mesh(new THREE.BoxGeometry(0.16, len, 0.16), mat);
     seg.position.copy(prev).add(next).multiplyScalar(0.5);
     seg.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), next.clone().sub(prev).normalize());
     g.add(seg);
@@ -64,69 +77,98 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
       setFailed(true);
       return;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1.75 : 2));
     renderer.setSize(el.clientWidth || 300, el.clientHeight || 300);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.style.display = 'block';
     el.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0a1226);
-    scene.fog = new THREE.FogExp2(0x0a1226, 0.012);
-    const camera = new THREE.PerspectiveCamera(36, 1, 0.5, 200);
+    const sky = new THREE.Color(0x78c8ff);
+    scene.background = sky.clone();
+    scene.fog = new THREE.FogExp2(0x78c8ff, 0.011);
+    const camera = new THREE.PerspectiveCamera(36, 1, 0.5, 260);
 
-    const ambient = new THREE.AmbientLight(0x6678a8, 0.55);
+    const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x6a8f5a, 1.0);
+    scene.add(hemi);
+    const ambient = new THREE.AmbientLight(0xffffff, 0.2);
     scene.add(ambient);
-    const moon = new THREE.DirectionalLight(0x8fa8ff, 0.7);
-    moon.position.set(-10, 20, 8);
+    const sun = new THREE.DirectionalLight(0xfff4e0, 1.7);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(coarse ? 1024 : 2048, coarse ? 1024 : 2048);
+    const sc = sun.shadow.camera;
+    sc.left = -24;
+    sc.right = 24;
+    sc.top = 20;
+    sc.bottom = -20;
+    sc.near = 1;
+    sc.far = 90;
+    sun.shadow.bias = -0.0006;
+    sun.shadow.normalBias = 0.04;
+    scene.add(sun, sun.target);
+    const moon = new THREE.DirectionalLight(0x8fa8ff, 0);
+    moon.position.set(12, 24, -8);
     scene.add(moon);
-    scene.add(new THREE.HemisphereLight(0x3a4a7a, 0x0a0f1c, 0.35));
 
-    // Ground and street grid
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), new THREE.MeshStandardMaterial({ color: 0x0b111f, roughness: 1 }));
-    ground.rotation.x = -Math.PI / 2;
-    scene.add(ground);
-    const streets = new THREE.GridHelper(60, 30, 0x1b2845, 0x121b30);
-    streets.position.y = 0.02;
-    scene.add(streets);
+    buildGround(scene);
+    const skyProps = buildSky(scene);
+    const traffic = buildTraffic(scene);
+    const lamps = buildLamps();
+    scene.add(lamps.group);
+    const smoke = buildSmoke(scene);
 
     // Districts
-    const tex = windowTexture();
+    const tex = makeWallTextures();
     const views = {} as Record<DistrictId, DistrictView>;
     const nodes = useGame.getState().g.nodes;
     const pickables: THREE.Object3D[] = [];
     for (const id of DISTRICT_ORDER) {
       const v = buildDistrict(id, tex);
-      const p = worldPos(nodes[id].position.x, nodes[id].position.y);
-      v.group.position.copy(p);
+      v.group.position.copy(worldPos(nodes[id].position.x, nodes[id].position.y));
       scene.add(v.group);
       views[id] = v;
       pickables.push(v.group);
     }
 
-    // Background filler city
+    const inPad = (x: number, z: number, m = 1.2) =>
+      DISTRICT_ORDER.some((id) => {
+        const q = views[id].group.position;
+        return Math.abs(x - q.x) < PAD.w / 2 + m && Math.abs(z - q.z) < PAD.d / 2 + m;
+      });
+    const onRoad = (x: number, z: number) =>
+      ROADS.horizontals.some((r) => Math.abs(z - r) < 1.7) ||
+      (z > ROADS.vz[0] - 1 && z < ROADS.vz[1] + 1 && ROADS.verticals.some((r) => Math.abs(x - r) < 1.7)) ||
+      (Math.abs(x - DEPOT.x) < 3 && Math.abs(z - DEPOT.z) < 2.4);
+    buildTrees(scene, (x, z) => inPad(x, z, 0.9) || onRoad(x, z), 90);
+
+    // Filler city beyond the districts
     {
       const rng = mulberry32(99);
-      const geo = new THREE.BoxGeometry(1, 1, 1);
-      const mat = new THREE.MeshStandardMaterial({ color: 0x151d30, emissive: new THREE.Color(0xffd9a0), emissiveMap: tex, emissiveIntensity: 0.16, roughness: 0.9 });
-      const mesh = new THREE.InstancedMesh(geo, mat, 110);
+      const mat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: tex.map, emissiveMap: tex.mask, emissive: new THREE.Color(0xffd9a0), emissiveIntensity: 0 });
+      const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, 60);
+      mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(60 * 3), 3);
       const m4 = new THREE.Matrix4();
+      const col = new THREE.Color();
+      const tints = [0xd8e4f5, 0xf0d9c4, 0xd9e8d0, 0xe5d4f0, 0xf5e6b8];
       let n = 0;
       let guard = 0;
-      while (n < 110 && guard++ < 5000) {
-        const x = (rng() - 0.5) * 56;
-        const z = (rng() - 0.5) * 44;
-        const near = DISTRICT_ORDER.some((id) => {
-          const q = views[id].group.position;
-          return Math.abs(x - q.x) < PAD.w / 2 + 1.3 && Math.abs(z - q.z) < PAD.d / 2 + 1.3;
-        });
-        if (near) continue;
-        const h = 0.5 + rng() * rng() * 3.4;
-        const w = 0.7 + rng() * 0.8;
+      while (n < 60 && guard++ < 5000) {
+        const x = (rng() - 0.5) * 70;
+        const z = -10 - rng() * 28;
+        if (Math.abs(x) < 17 && z > -14) continue;
+        const h = 1.2 + rng() * rng() * 6;
+        const w = 1 + rng() * 1.3;
         m4.makeScale(w, h, w).setPosition(x, h / 2, z);
-        mesh.setMatrixAt(n++, m4);
+        mesh.setMatrixAt(n, m4);
+        mesh.setColorAt(n, col.setHex(tints[Math.floor(rng() * tints.length)]));
+        n++;
       }
       mesh.count = n;
+      mesh.castShadow = mesh.receiveShadow = true;
       scene.add(mesh);
+      scene.userData.fillerMat = mat;
     }
 
     // Power lines with moving energy packets
@@ -139,23 +181,32 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
       packetMat: THREE.MeshBasicMaterial;
     }
     const lines: Line[] = GRID_EDGES.map(([a, b]) => {
-      const pa = views[a].group.position.clone().setY(1.0);
-      const pb = views[b].group.position.clone().setY(1.0);
-      const mid = pa.clone().add(pb).multiplyScalar(0.5).setY(3.4);
+      const pa = views[a].group.position.clone().setY(1.3);
+      const pb = views[b].group.position.clone().setY(1.3);
+      const mid = pa.clone().add(pb).multiplyScalar(0.5).setY(3.9);
       const curve = new THREE.QuadraticBezierCurve3(pa, mid, pb);
-      const mat = new THREE.MeshBasicMaterial({ color: 0x00f5d4 });
-      scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 28, 0.035, 5), mat));
+      const mat = new THREE.MeshBasicMaterial({ color: 0x00e5c0 });
+      scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 28, 0.032, 5), mat));
       const packetMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       const packets = [0, 1, 2].map(() => {
-        const m = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), packetMat);
+        const m = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), packetMat);
         scene.add(m);
         return m;
       });
       return { a, b, curve, mat, packets, packetMat };
     });
+    // Pylons at each district
+    const pylonMat = lam(0x39424f);
+    for (const id of DISTRICT_ORDER) {
+      const p = views[id].group.position;
+      const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.3, 0.16), pylonMat);
+      m.position.set(p.x, 0.85, p.z);
+      m.castShadow = true;
+      scene.add(m);
+    }
 
-    // Alert markers (bobbing cone above stressed districts) and selection ring
-    const markerGeo = new THREE.ConeGeometry(0.35, 0.8, 4);
+    // Alert markers (bobbing cone) and selection ring
+    const markerGeo = new THREE.ConeGeometry(0.4, 0.9, 4);
     markerGeo.rotateX(Math.PI);
     const markers = {} as Record<DistrictId, THREE.Mesh>;
     for (const id of DISTRICT_ORDER) {
@@ -164,13 +215,13 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
       scene.add(m);
       markers[id] = m;
     }
-    const ring = new THREE.Mesh(new THREE.RingGeometry(3.25, 3.45, 64), new THREE.MeshBasicMaterial({ color: 0x3a86ff, side: THREE.DoubleSide, transparent: true }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(3.15, 3.5, 4, 1, Math.PI / 4), new THREE.MeshBasicMaterial({ color: 0x2f7bff, side: THREE.DoubleSide, transparent: true }));
     ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.3;
+    ring.position.y = 0.45;
     scene.add(ring);
 
     // Rain
-    const RAIN = 650;
+    const RAIN = 700;
     const rainPos = new Float32Array(RAIN * 6);
     const rainSeed = new Float32Array(RAIN * 3);
     for (let i = 0; i < RAIN; i++) {
@@ -180,39 +231,47 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
     }
     const rainGeo = new THREE.BufferGeometry();
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPos, 3));
-    const rainMat = new THREE.LineBasicMaterial({ color: 0x9db8ff, transparent: true, opacity: 0.2 });
+    const rainMat = new THREE.LineBasicMaterial({ color: 0xb7cdf5, transparent: true, opacity: 0 });
     const rain = new THREE.LineSegments(rainGeo, rainMat);
     rain.frustumCulled = false;
     scene.add(rain);
 
-    // Lightning bolts
     const bolts = new Map<string, { obj: THREE.Group; born: number }>();
     let flash = 0;
 
     // Depot, beams and the repair truck
     const depot = new THREE.Group();
     depot.position.set(DEPOT.x, 0, DEPOT.z);
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 2.4), new THREE.MeshStandardMaterial({ color: 0x1d2538, roughness: 0.9 }));
-    slab.position.y = 0.05;
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 2.4), lam(0x9aa5b8));
+    slab.position.y = 0.09;
+    slab.receiveShadow = true;
     depot.add(slab);
-    const depotRing = new THREE.Mesh(new THREE.RingGeometry(1.45, 1.75, 48), new THREE.MeshBasicMaterial({ color: 0xffd400, side: THREE.DoubleSide, transparent: true }));
+    const depotRing = new THREE.Mesh(new THREE.RingGeometry(1.45, 1.75, 4, 1, Math.PI / 4), new THREE.MeshBasicMaterial({ color: 0xffd400, side: THREE.DoubleSide, transparent: true }));
     depotRing.rotation.x = -Math.PI / 2;
-    depotRing.position.y = 0.14;
+    depotRing.position.y = 0.16;
     depot.add(depotRing);
-    const depotBeam = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 7, 24, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd400, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }));
-    depotBeam.position.y = 3.5;
+    const depotBeam = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 4.5, 4, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd400, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }));
+    depotBeam.rotation.y = Math.PI / 4;
+    depotBeam.position.y = 2.25;
     depot.add(depotBeam);
-    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.5), new THREE.MeshStandardMaterial({ color: 0xff6a00, emissive: 0x401800 }));
-    crate.position.set(-1.9, 0.3, 0);
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.5), lam(0xff7a1a, { emissive: new THREE.Color(0x401800) }));
+    crate.position.set(-1.9, 0.35, 0);
+    crate.castShadow = true;
     depot.add(crate);
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.45, 0.08), new THREE.MeshBasicMaterial({ color: 0xffd400 }));
+    sign.position.set(1.6, 1.2, -0.9);
+    const signPole = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.0, 0.08), lam(0x39424f));
+    signPole.position.set(1.6, 0.6, -0.9);
+    depot.add(sign, signPole);
     scene.add(depot);
-    const destRing = new THREE.Mesh(new THREE.RingGeometry(2.55, 2.85, 56), new THREE.MeshBasicMaterial({ color: 0x00ff88, side: THREE.DoubleSide, transparent: true }));
+    const destRing = new THREE.Mesh(new THREE.RingGeometry(2.55, 2.9, 4, 1, Math.PI / 4), new THREE.MeshBasicMaterial({ color: 0x00ff88, side: THREE.DoubleSide, transparent: true }));
     destRing.rotation.x = -Math.PI / 2;
-    destRing.position.y = 0.34;
+    destRing.position.y = 0.5;
     scene.add(destRing);
-    const destBeam = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 12, 28, 1, true), new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+    const destBeam = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 12, 4, 1, true), new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+    destBeam.rotation.y = Math.PI / 4;
     scene.add(destBeam);
-    const { group: truckGroup, beaconMat } = buildTruck();
+    const { group: truckGroup, beaconMat, headMats, spot: truckSpot } = buildTruck();
     truckGroup.scale.setScalar(1.3);
     scene.add(truckGroup);
     const blockers = DISTRICT_ORDER.flatMap((id) => {
@@ -237,6 +296,7 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
       if (!isDown) return;
       if (e.code === 'KeyE' && st.g.phase === 'RUNNING') sound.horn();
       if (e.code === 'KeyV') st.toggleView();
+      if (e.code === 'KeyN') st.cycleTimeOfDay();
       if (e.code === 'F1' || (e.key === '?' && !e.ctrlKey)) {
         e.preventDefault();
         st.openTutorial();
@@ -278,9 +338,7 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
       const halfW = (WORLD.w / 2 + 2.2) * (portrait ? 0.92 : 1);
       const halfD = WORLD.d / 2 + 2.4;
       const elev = THREE.MathUtils.degToRad(portrait ? 56 : 48);
-      const distH = halfW / Math.tan(hf);
-      const distV = (halfD * Math.sin(elev) + 3.5) / Math.tan(vf);
-      const dist = Math.max(distH, distV) * 1.02;
+      const dist = Math.max(halfW / Math.tan(hf), (halfD * Math.sin(elev) + 3.5) / Math.tan(vf)) * 1.02;
       camera.position.set(0, target.y + Math.sin(elev) * dist, Math.cos(elev) * dist);
       camera.lookAt(target);
       controls.update();
@@ -315,19 +373,34 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
 
     // Frame loop
     const tmp = new THREE.Vector3();
+    const tmpC = new THREE.Color();
     const clock = new THREE.Clock();
     let t = 0;
     let raf = 0;
+    let night = autoNight(useGame.getState().g) * 0;
+    const skyDay = new THREE.Color(0x78c8ff);
+    const skyDusk = new THREE.Color(0xff9a6a);
+    const skyNight = new THREE.Color(0x0a1226);
+    const skyStorm = new THREE.Color(0x7d8ea3);
+    const sunDir = new THREE.Vector3();
+    const emitAcc: Record<string, number> = {};
     const phases = Object.fromEntries(DISTRICT_ORDER.map((id, i) => [id, i * 1.7])) as Record<DistrictId, number>;
+    const darkness: Record<string, number> = {};
 
     const frame = () => {
       raf = requestAnimationFrame(frame);
       const dt = Math.min(clock.getDelta(), 0.1);
       t += dt;
-      const g = useGame.getState().g;
-      const storm = Math.min(1, 0.25 + 0.75 * (g.tick / g.durationSec));
+      const gs = useGame.getState();
+      const g = gs.g;
 
-      // Hazard FX targets per district
+      // --- time of day, weather and light
+      const tod = g.settings.timeOfDay;
+      const nt = tod === 'DAY' ? 0 : tod === 'NIGHT' ? 1 : autoNight(g);
+      night += (nt - night) * Math.min(1, dt * 1.2);
+      const stormBase = g.mode === 'PRACTICE' ? 0.1 + (g.practice.hazards ? 0.2 : 0) : 0.2 + 0.8 * progress(g);
+      const storm = Math.min(1, stormBase * (g.difficulty === 'CADET' ? 0.6 : 1) + (g.hazards.length ? 0.15 : 0));
+
       const fxTarget: Partial<Record<DistrictId, { color: number; i: number }>> = {};
       for (const h of g.hazards) {
         const f = FX[h.type];
@@ -353,23 +426,46 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
         }
       }
       flash = Math.max(0, flash - dt * 2.2);
-      ambient.intensity = 0.55 + flash * 2.2;
 
-      // Sky and rain follow the storm
-      (scene.background as THREE.Color).setRGB(0.04 - 0.02 * storm + flash * 0.3, 0.07 - 0.03 * storm + flash * 0.3, 0.15 - 0.07 * storm + flash * 0.4);
-      (scene.fog as THREE.FogExp2).color.copy(scene.background as THREE.Color);
-      rainMat.opacity = 0.1 + 0.4 * storm;
-      for (let i = 0; i < RAIN; i++) {
-        let y = rainSeed[i * 3 + 1] - dt * (22 + 10 * storm);
-        if (y < 0) y += 24;
-        rainSeed[i * 3 + 1] = y;
-        const x = rainSeed[i * 3] + (y - 12) * 0.05;
-        const z = rainSeed[i * 3 + 2];
-        rainPos.set([x, y, z, x - 0.05, y + 0.7, z], i * 6);
+      // sky colour: day -> dusk -> night, greyed by storm
+      const dusk = Math.sin(Math.min(1, night) * Math.PI);
+      sky.copy(skyDay).lerp(skyStorm, storm * 0.6).lerp(skyDusk, dusk * 0.55).lerp(skyNight, smooth(0.35, 1, night));
+      sky.r += flash * 0.5;
+      sky.g += flash * 0.5;
+      sky.b += flash * 0.6;
+      (scene.background as THREE.Color).copy(sky);
+      (scene.fog as THREE.FogExp2).color.copy(sky);
+      (scene.fog as THREE.FogExp2).density = 0.009 + storm * 0.006 + night * 0.004;
+      sunDir.set(-0.5, 0.78 * (1 - night * 0.7) + 0.12, 0.42).normalize();
+      sun.position.copy(sunDir).multiplyScalar(36);
+      sun.target.position.set(0, 0, 0);
+      sun.intensity = 1.9 * (1 - smooth(0.3, 0.85, night)) * (1 - 0.55 * storm);
+      sun.color.setHex(0xfff4e0).lerp(tmpC.setHex(0xff9a55), dusk * 0.8);
+      moon.intensity = 0.7 * smooth(0.3, 1, night);
+      hemi.intensity = (0.3 + 0.8 * (1 - night)) * (1 - 0.3 * storm);
+      hemi.color.setHex(0xcfe8ff).lerp(tmpC.setHex(0x4a5a8a), night);
+      hemi.groundColor.setHex(0x6a8f5a).lerp(tmpC.setHex(0x1a2030), night);
+      ambient.intensity = 0.12 + night * 0.1 + flash * 2.4;
+      skyProps.update(dt, night, storm, sunDir);
+      lamps.update(night);
+      traffic.update(dt, night);
+      (scene.userData.fillerMat as THREE.MeshLambertMaterial).emissiveIntensity = night * 0.9;
+
+      rainMat.opacity = Math.max(0, storm - 0.3) * 0.75;
+      rain.visible = rainMat.opacity > 0.01;
+      if (rain.visible) {
+        for (let i = 0; i < RAIN; i++) {
+          let y = rainSeed[i * 3 + 1] - dt * (22 + 10 * storm);
+          if (y < 0) y += 24;
+          rainSeed[i * 3 + 1] = y;
+          const x = rainSeed[i * 3] + (y - 12) * 0.05;
+          const z = rainSeed[i * 3 + 2];
+          rainPos.set([x, y, z, x - 0.05, y + 0.7, z], i * 6);
+        }
+        rainGeo.attributes.position.needsUpdate = true;
       }
-      rainGeo.attributes.position.needsUpdate = true;
 
-      // Districts
+      // --- districts
       const scr: Record<string, { x: number; y: number; vis: boolean }> = {};
       const scrL: Record<string, { x: number; y: number; vis: boolean }> = {};
       const w = el.clientWidth;
@@ -379,82 +475,106 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
         const n = g.nodes[id];
         const ph = phases[id];
         let c: THREE.Color = v.windowColor;
-        let inten = 1;
+        let inten = night * 1.15;
         let rimC: THREE.Color = OK;
         let li = 5;
+        let dark = 1;
         switch (n.status) {
           case 'CAUTION':
             c = AMBER;
-            inten = 0.95 + 0.25 * Math.sin(t * 5 + ph);
+            inten = (0.5 + 0.5 * night) * (0.85 + 0.3 * Math.sin(t * 5 + ph));
             rimC = AMBER;
             break;
           case 'CRITICAL':
             c = RED;
-            inten = 1.3 + 0.9 * Math.sin(t * 9 + ph);
+            inten = (0.9 + 0.5 * night) * (1 + 0.5 * Math.sin(t * 9 + ph));
             rimC = RED;
             li = 8;
             break;
           case 'BLACKOUT':
             c = DEAD;
-            inten = 0.02;
+            inten = 0;
             rimC = DEAD_LINE;
             li = 0;
+            dark = 0.5;
             break;
           case 'ISOLATED':
             c = BLUE;
-            inten = 0.4;
+            inten = 0.3 + 0.3 * night;
             rimC = BLUE;
             li = 1.5;
+            dark = 0.8;
             break;
         }
-        v.wall.emissive.lerp(c, 0.12);
-        v.wall.emissiveIntensity += (inten - v.wall.emissiveIntensity) * 0.2;
+        darkness[id] = (darkness[id] ?? 1) + (dark - (darkness[id] ?? 1)) * 0.08;
+        v.walls.forEach((m, i) => {
+          m.emissive.lerp(c, 0.12);
+          m.emissiveIntensity += (inten - m.emissiveIntensity) * 0.2;
+          m.color.copy(v.wallBase[i]).multiplyScalar(darkness[id]);
+        });
         v.rim.color.lerp(rimC, 0.12);
+        v.lamp.color.lerp(n.status === 'BLACKOUT' ? DEAD_LINE : rimC, 0.15);
         v.light.color.lerp(c, 0.12);
-        v.light.intensity += (li * (0.9 + 0.1 * Math.sin(t * 3 + ph)) - v.light.intensity) * 0.15;
+        v.light.intensity += (li * night * (0.9 + 0.1 * Math.sin(t * 3 + ph)) - v.light.intensity) * 0.15;
         for (const a of v.accents) {
-          const baseI = (a.mat.userData.baseI ??= (a.mat as THREE.MeshStandardMaterial).emissiveIntensity) as number;
-          const m = a.mat as THREE.MeshStandardMaterial;
-          m.emissive.lerp(n.status === 'NOMINAL' ? a.base : c, 0.12);
-          m.emissiveIntensity += ((n.status === 'BLACKOUT' ? 0.02 : baseI * Math.max(0.4, inten)) - m.emissiveIntensity) * 0.2;
+          a.mat.emissive.lerp(n.status === 'NOMINAL' ? a.base : c, 0.12);
+          const goal = n.status === 'BLACKOUT' ? 0 : a.baseI * (n.status === 'NOMINAL' ? 0.6 + 0.4 * night : Math.max(0.5, inten));
+          a.mat.emissiveIntensity += (goal - a.mat.emissiveIntensity) * 0.2;
         }
         const fx = fxTarget[id];
         if (fx) v.fx.color.setHex(fx.color);
         v.fx.intensity += ((fx ? fx.i : 0) - v.fx.intensity) * 0.35;
         const online = n.status !== 'BLACKOUT' && n.status !== 'ISOLATED';
         v.anim.forEach((fn) => fn(t, online));
+        v.crew.forEach((cm) => animateCrewmate(cm, t, MOOD[n.status]));
+
+        // smoke and steam
+        const p = v.group.position;
+        const emit = (kind: 'steam' | 'smoke' | 'ash' | 'spark', rate: number, x: number, y: number, z: number) => {
+          emitAcc[id + kind] = (emitAcc[id + kind] ?? 0) + rate * dt;
+          while (emitAcc[id + kind] >= 1) {
+            emitAcc[id + kind] -= 1;
+            smoke.emit(kind, p.x + x, y, p.z + z);
+          }
+        };
+        if (id === 'industrial' && online) v.stacks.forEach((s) => emit(n.status === 'NOMINAL' ? 'steam' : 'smoke', 2.2, s.x, s.y, s.z));
+        if (n.status === 'CAUTION') emit('steam', 2, (Math.random() - 0.5) * 2, v.topY + 0.3, (Math.random() - 0.5) * 1.5);
+        if (n.status === 'CRITICAL') {
+          emit('smoke', 6, (Math.random() - 0.5) * 2, v.topY + 0.2, (Math.random() - 0.5) * 1.5);
+          emit('spark', 5, (Math.random() - 0.5) * 2, v.topY, (Math.random() - 0.5) * 1.5);
+        }
+        if (n.status === 'BLACKOUT') emit('ash', 1.6, (Math.random() - 0.5) * 2, v.topY * 0.6, (Math.random() - 0.5) * 1.5);
 
         const mk = markers[id];
         const bad = n.status === 'CRITICAL' || n.status === 'CAUTION' || n.status === 'BLACKOUT';
         mk.visible = bad;
         if (bad) {
-          (mk.material as THREE.MeshBasicMaterial).color.copy(n.status === 'CAUTION' ? AMBER : n.status === 'BLACKOUT' ? new THREE.Color(0x8a96aa) : RED);
-          mk.position.set(v.group.position.x, v.topY + 1.5 + Math.sin(t * 4 + ph) * 0.25, v.group.position.z);
+          (mk.material as THREE.MeshBasicMaterial).color.copy(n.status === 'CAUTION' ? AMBER : n.status === 'BLACKOUT' ? tmpC.setHex(0x8a96aa) : RED);
+          mk.position.set(p.x, v.topY + 1.7 + Math.sin(t * 4 + ph) * 0.25, p.z);
           mk.rotation.y = t * 2;
         }
 
-        tmp.set(v.group.position.x, v.topY + 0.9, v.group.position.z).project(camera);
+        tmp.set(p.x, v.topY + 1.0, p.z).project(camera);
         scr[id] = { x: (tmp.x * 0.5 + 0.5) * w, y: (-tmp.y * 0.5 + 0.5) * h, vis: tmp.z < 1 };
-        tmp.set(v.group.position.x, 0.3, v.group.position.z + PAD.d / 2 + 0.5).project(camera);
+        tmp.set(p.x, 0.3, p.z + PAD.d / 2 + 0.5).project(camera);
         scrL[id] = { x: (tmp.x * 0.5 + 0.5) * w, y: (-tmp.y * 0.5 + 0.5) * h, vis: tmp.z < 1 };
       }
+      smoke.update(dt);
 
-      // Selection ring
       const sel = views[g.selectedNodeId];
       ring.position.x = sel.group.position.x;
       ring.position.z = sel.group.position.z;
-      (ring.material as THREE.MeshBasicMaterial).opacity = 0.55 + 0.45 * Math.sin(t * 4);
+      (ring.material as THREE.MeshBasicMaterial).opacity = 0.6 + 0.4 * Math.sin(t * 4);
       ring.scale.setScalar(1 + 0.02 * Math.sin(t * 4));
 
-      // Power lines
       for (const L of lines) {
         const na = g.nodes[L.a];
         const nb = g.nodes[L.b];
         const dead = na.status === 'BLACKOUT' || nb.status === 'BLACKOUT' || na.isolated || nb.isolated;
-        const worst = STATUS_RANK[na.status] >= STATUS_RANK[nb.status] ? na.status : nb.status;
+        const worst = RANK[na.status] >= RANK[nb.status] ? na.status : nb.status;
         const col = dead ? DEAD_LINE : worst === 'CRITICAL' ? RED : worst === 'CAUTION' ? AMBER : OK;
         L.mat.color.lerp(col, 0.12);
-        L.packetMat.color.copy(L.mat.color).lerp(new THREE.Color(0xffffff), 0.5);
+        L.packetMat.color.copy(L.mat.color).lerp(tmpC.setHex(0xffffff), 0.55);
         const forward = na.supply - na.demand >= nb.supply - nb.demand;
         L.packets.forEach((p, k) => {
           p.visible = !dead;
@@ -462,21 +582,22 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
           let u = (t * 0.28 + k / 3) % 1;
           if (!forward) u = 1 - u;
           L.curve.getPoint(u, p.position);
+          p.rotation.y = t * 2;
         });
       }
 
-      // Truck, zones, beams and camera
-      const gs = useGame.getState();
-      const running = gs.g.phase === 'RUNNING' && !gs.tutorialOpen;
+      // --- truck, zones, beams and camera
+      const running = g.phase === 'RUNNING' && !gs.tutorialOpen;
       if (running) stepTruck(dt, blockers);
       truckGroup.position.set(truck.x, 0, truck.z);
       truckGroup.rotation.y = truck.heading;
       beaconMat.color.setHex(Math.sin(t * 9) > 0 ? 0xffa500 : 0x553300);
+      truckSpot.intensity = 55 * night;
+      headMats.forEach((m) => m.color.setRGB(0.7 + night * 0.3, 0.7 + night * 0.28, 0.5 + night * 0.1));
       const obj = currentObjective(g);
-      depot.visible = true;
       const needKit = !g.crew.hasKit;
-      depotRing.material.opacity = needKit ? 0.6 + 0.4 * Math.sin(t * 5) : 0.15;
-      (depotBeam.material as THREE.MeshBasicMaterial).opacity = needKit ? 0.16 + 0.06 * Math.sin(t * 5) : 0.03;
+      (depotRing.material as THREE.MeshBasicMaterial).opacity = needKit ? 0.6 + 0.4 * Math.sin(t * 5) : 0.15;
+      (depotBeam.material as THREE.MeshBasicMaterial).opacity = needKit ? 0.13 + 0.05 * Math.sin(t * 5) : 0.03;
       depotRing.scale.setScalar(needKit ? 1 + 0.05 * Math.sin(t * 5) : 1);
       const tgt = obj.kind === 'DELIVER' && obj.targetNodeId ? views[obj.targetNodeId].group.position : null;
       destRing.visible = destBeam.visible = !!tgt;
@@ -488,8 +609,7 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
         destRing.scale.setScalar(1 + 0.05 * Math.sin(t * 6));
       }
       if (running && t - lastAct > 0.5) {
-        const dd = Math.hypot(truck.x - DEPOT.x, truck.z - DEPOT.z);
-        if (dd < DEPOT.r && !g.crew.hasKit && g.crew.kitCooldown <= 0) {
+        if (Math.hypot(truck.x - DEPOT.x, truck.z - DEPOT.z) < DEPOT.r && !g.crew.hasKit && g.crew.kitCooldown <= 0) {
           gs.takeKit();
           lastAct = t;
         }
@@ -509,25 +629,28 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
       }
       const chase = gs.cityView === 'CHASE';
       if (chase !== (lastView === 'CHASE')) {
-        lastView = gs.cityView;
         interacted = false;
         if (!chase) fit();
       }
       lastView = gs.cityView;
+      const wantFov = chase ? 44 : 36;
+      if (Math.abs(camera.fov - wantFov) > 0.05) {
+        camera.fov += (wantFov - camera.fov) * Math.min(1, dt * 5);
+        camera.updateProjectionMatrix();
+      }
       controls.enabled = !chase;
       if (chase) {
         const fx = Math.sin(truck.heading);
         const fz = Math.cos(truck.heading);
-        const back = 8.6 + Math.abs(truck.speed) * 0.3;
-        const want = tmp.set(truck.x - fx * back, 6.6 + Math.abs(truck.speed) * 0.15, truck.z - fz * back);
+        const back = 10.8 + Math.abs(truck.speed) * 0.35;
+        const want = tmp.set(truck.x - fx * back, 8.2 + Math.abs(truck.speed) * 0.2, truck.z - fz * back);
         camera.position.lerp(want, 1 - Math.pow(0.001, dt));
-        camera.lookAt(truck.x + fx * 3.2, 0.4, truck.z + fz * 3.2);
+        camera.lookAt(truck.x + fx * 4, 0.3, truck.z + fz * 4);
       } else {
         controls.update();
       }
       renderer.render(scene, camera);
 
-      // HTML overlay (labels and alerts) follows the 3D anchors
       const ov = overlay.current;
       if (ov) {
         ov.querySelectorAll<HTMLElement>('[data-anchor]').forEach((node) => {
@@ -554,7 +677,8 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
         const m = o as THREE.Mesh;
         m.geometry?.dispose();
       });
-      tex.dispose();
+      tex.map.dispose();
+      tex.mask.dispose();
       renderer.dispose();
       renderer.domElement.remove();
     };
@@ -562,7 +686,7 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
 
   if (failed) return <GridMap />;
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-2xl border border-scada-border/70 bg-scada-bg" aria-label="City power map">
+    <div className="relative h-full w-full overflow-hidden rounded-2xl border border-white/15 bg-scada-bg" aria-label="City power map">
       <div ref={host} className="absolute inset-0" />
       <CityHud topOffset={topOffset} />
       <div ref={overlay} className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -570,91 +694,5 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
         <CityAlerts />
       </div>
     </div>
-  );
-}
-
-const DOT: Record<NodeStatus, string> = {
-  NOMINAL: 'bg-scada-mint',
-  CAUTION: 'bg-scada-amber',
-  CRITICAL: 'bg-scada-crimson animate-alarm-pulse',
-  BLACKOUT: 'bg-scada-dim',
-  ISOLATED: 'bg-scada-cobalt',
-};
-
-function DistrictLabels() {
-  const nodes = useGame((s) => s.g.nodes);
-  const selected = useGame((s) => s.g.selectedNodeId);
-  const selectNode = useGame((s) => s.selectNode);
-  return (
-    <>
-      {DISTRICT_ORDER.map((id) => {
-        const n = nodes[id];
-        return (
-          <div key={id} data-anchor={id} data-kind="label" className="absolute left-0 top-0 will-change-transform" style={{ visibility: 'hidden' }}>
-            <button
-              onClick={() => selectNode(id)}
-              className={`pointer-events-auto flex min-h-8 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold text-white shadow-lg backdrop-blur ${
-                selected === id ? 'border-scada-cobalt bg-scada-cobalt/40' : 'border-white/15 bg-black/55'
-              }`}
-            >
-              <span className={`h-2 w-2 rounded-full ${DOT[n.status]}`} />
-              {n.name.split(' ')[0]}
-              {n.ownerId === 'PLAYER' && useGame.getState().g.mode === 'SABOTEUR_DEDUCTION' ? <span className="text-scada-mint">· you</span> : null}
-            </button>
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
-const TONE = {
-  crit: 'border-scada-crimson bg-[#3a0a1c]/95 text-white shadow-glow-crimson',
-  warn: 'border-scada-amber bg-[#3a2a05]/95 text-white shadow-glow-amber',
-  info: 'border-scada-mint bg-[#04312c]/95 text-white shadow-glow-mint',
-} as const;
-
-function CityAlerts() {
-  const logs = useGame((s) => s.g.logs);
-  const selectNode = useGame((s) => s.selectNode);
-  const [alerts, setAlerts] = useState<CityAlert[]>([]);
-  const lastSeen = useRef(useGame.getState().g.logCounter);
-
-  useEffect(() => {
-    const fresh = logs.filter((l) => Number(l.id.slice(1)) > lastSeen.current);
-    if (!fresh.length) return;
-    lastSeen.current = Number(fresh[fresh.length - 1].id.slice(1));
-    const made: CityAlert[] = [];
-    for (const l of fresh) {
-      if (!l.nodeId) continue;
-      const a = alertFromLog(l);
-      if (a) made.push({ key: l.id, nodeId: l.nodeId, born: Date.now(), ...a });
-    }
-    if (made.length) setAlerts((cur) => [...cur, ...made].slice(-10));
-  }, [logs]);
-
-  useEffect(() => {
-    const id = window.setInterval(() => setAlerts((cur) => (cur.some((a) => Date.now() - a.born > 5500) ? cur.filter((a) => Date.now() - a.born <= 5500) : cur)), 500);
-    return () => window.clearInterval(id);
-  }, []);
-
-  const slots: Record<string, number> = {};
-  return (
-    <>
-      {alerts.map((a) => {
-        const slot = (slots[a.nodeId] = (slots[a.nodeId] ?? -1) + 1);
-        return (
-          <div key={a.key} data-anchor={a.nodeId} data-kind="alert" data-slot={slot} className="absolute left-0 top-0 will-change-transform" style={{ visibility: 'hidden' }}>
-            <button
-              onClick={() => selectNode(a.nodeId as DistrictId)}
-              className={`pointer-events-auto animate-pop-in flex max-w-[190px] items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-left text-xs font-bold ${TONE[a.tone]}`}
-            >
-              <span className="text-base leading-none">{a.icon}</span>
-              <span className="leading-tight">{a.text}</span>
-            </button>
-          </div>
-        );
-      })}
-    </>
   );
 }

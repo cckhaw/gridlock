@@ -8,6 +8,7 @@ export default function FocusPanel() {
   const g = useGame((s) => s.g);
   const selectNode = useGame((s) => s.selectNode);
   const setSupply = useGame((s) => s.setSupply);
+  const patchAssist = useGame((s) => s.patchAssist);
   const node = g.nodes[g.selectedNodeId];
   const st = STATUS_STYLE[node.status];
   const Icon = ICONS[node.icon];
@@ -54,6 +55,24 @@ export default function FocusPanel() {
           <div key={h.id} className="text-[11px] font-bold text-scada-amber">⚠ {h.type.replace('_', ' ')} · {h.remainingSec}s</div>
         ))}
       </div>
+
+      {g.assistAllowed && (
+        <div className="scada-panel flex flex-col gap-2 p-3">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-scada-dim">Autopilot (beginner help)</div>
+          {([['autoBalance', 'Balance power automatically'], ['autoCool', 'Cool hot districts automatically']] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => patchAssist({ [k]: !g.assist[k] })}
+              className="touch-target flex min-h-12 items-center justify-between gap-3 rounded-xl border border-white/15 bg-black/30 px-3 text-left text-xs"
+              aria-pressed={g.assist[k]}
+            >
+              <span>{label}</span>
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${g.assist[k] ? 'bg-scada-mint text-scada-bg' : 'bg-scada-border text-scada-dim'}`}>{g.assist[k] ? 'ON' : 'OFF'}</span>
+            </button>
+          ))}
+          <div className="text-[11px] leading-4 text-scada-dim">Turn these OFF when you want to practise the sliders and Cool down yourself.</div>
+        </div>
+      )}
 
       <div className="scada-panel p-3">
         <div className="mb-1 flex justify-between text-[11px] text-scada-dim">
