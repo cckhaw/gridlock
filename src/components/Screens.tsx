@@ -1,4 +1,3 @@
-import { Radio, Siren, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useInstall } from '../pwa';
 import Replay from './Replay';
@@ -6,6 +5,25 @@ import { DIFFICULTY } from '../engine/constants';
 import { computeScore } from '../engine/score';
 import { bestKey, useGame } from '../store/useGame';
 import type { Difficulty, GameMode } from '../types/game';
+
+const MODES: { mode: GameMode; title: string; goal: string }[] = [
+  { mode: 'SOLO_CRISIS', title: 'Solo Crisis', goal: 'Run all 8 districts through a 5-minute storm. Drive the repair truck, balance power, keep fewer than 4 districts dark.' },
+  { mode: 'SABOTEUR_DEDUCTION', title: 'Find the Saboteurs', goal: 'Run 1 district beside 7 AI engineers. Two are saboteurs — read the news, inspect, and vote both out.' },
+];
+
+function Picker({ label, value, onPrev, onNext }: { label: string; value: string; onPrev: () => void; onNext: () => void }) {
+  const arrow = 'touch-target flex h-12 w-12 items-center justify-center rounded-xl border border-white/20 bg-black/40 text-xl text-white';
+  return (
+    <div>
+      <div className="mb-1 font-hud text-xs uppercase tracking-widest text-scada-dim">{label}</div>
+      <div className="flex items-center gap-2">
+        <button className={arrow} onClick={onPrev} aria-label={`Previous ${label}`}>◀</button>
+        <div className="flex h-12 flex-1 items-center justify-center rounded-xl border border-scada-mint/60 bg-black/40 font-hud text-lg font-bold uppercase tracking-wide text-scada-mint">{value}</div>
+        <button className={arrow} onClick={onNext} aria-label={`Next ${label}`}>▶</button>
+      </div>
+    </div>
+  );
+}
 
 export function MenuScreen() {
   const start = useGame((s) => s.start);
@@ -15,45 +33,56 @@ export function MenuScreen() {
   const setDifficulty = useGame((s) => s.setDifficulty);
   const best = useGame((s) => s.best);
   const pwa = useInstall();
-  const Mode = ({ mode, title, desc, Icon }: { mode: GameMode; title: string; desc: string; Icon: typeof Siren }) => (
-    <button onClick={() => start(mode)} className="touch-target scada-panel flex w-full items-start gap-3 border border-scada-cobalt/60 p-4 text-left">
-      <Icon size={28} className="mt-0.5 shrink-0 text-scada-cobalt" />
-      <span>
-        <span className="block text-sm font-bold text-scada-cobalt text-glow-cobalt">{title}</span>
-        <span className="block text-xs text-scada-dim">{desc}</span>
-        {best[bestKey(mode, difficulty)] ? (
-          <span className="mt-1 block text-[11px] text-scada-amber">BEST ({difficulty}): {best[bestKey(mode, difficulty)]}</span>
-        ) : null}
-      </span>
-    </button>
-  );
+  const [mi, setMi] = useState(0);
+  const diffs = Object.keys(DIFFICULTY) as Difficulty[];
+  const m = MODES[mi];
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
   return (
-    <main className="pt-safe pb-safe mx-auto flex min-h-full max-w-md flex-col gap-4 p-5 before:flex-1 before:content-[''] after:flex-1 after:content-['']">
+    <main className="pt-safe pb-safe relative mx-auto flex min-h-full max-w-md flex-col gap-4 p-5 before:flex-1 before:content-[''] after:flex-1 after:content-['']">
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-64 bg-gradient-to-b from-scada-cobalt/20 to-transparent" />
       <div>
-        <div className="flex items-center gap-2 text-scada-mint"><Radio size={20} /><span className="text-[11px]">CITY POWER CONTROL</span></div>
-        <h1 className="text-4xl font-extrabold tracking-tight text-scada-mint text-glow-mint">Blackout<br />Protocol</h1>
-        <p className="mt-2 text-xs text-scada-dim">A storm is rolling over the city. Keep eight districts powered for five minutes — match power to demand, cool what overheats, and stop blackouts from spreading.</p>
+        <div className="font-hud text-xs uppercase tracking-[0.3em] text-scada-mint">City power control</div>
+        <h1 className="font-hud text-6xl font-bold uppercase leading-[0.9] tracking-tight text-white">Black<span className="text-scada-amber">out</span><br />Protocol</h1>
+        <p className="mt-2 text-sm text-white/70">A storm is rolling over the city. Drive your repair truck, keep the power flowing, and keep the lights on.</p>
       </div>
-      <div>
-        <div className="mb-1 text-[11px] text-scada-dim">DIFFICULTY</div>
-        <div className="flex gap-2">
-          {(Object.keys(DIFFICULTY) as Difficulty[]).map((d) => (
-            <button
-              key={d}
-              onClick={() => setDifficulty(d)}
-              className={`touch-target h-12 flex-1 rounded border text-[11px] font-bold ${difficulty === d ? 'border-scada-mint text-scada-mint shadow-glow-mint' : 'border-scada-border text-scada-dim'}`}
-            >
-              {DIFFICULTY[d].label}
-            </button>
-          ))}
-        </div>
-        <div className="mt-1 text-[11px] text-scada-dim">{DIFFICULTY[difficulty].blurb}</div>
-      </div>
-      <Mode mode="SOLO_CRISIS" title="SOLO CRISIS" Icon={Siren} desc="Run all 8 districts through an escalating 5:00 storm. Hazards strike every 15–20s." />
-      <Mode mode="SABOTEUR_DEDUCTION" title="VS AI SABOTEURS" Icon={Users} desc="Run one district beside 7 AI engineers. Two are saboteurs — read the telemetry log, scan, and vote them out." />
-      <div className="text-[11px] text-scada-dim">First run of each mode shows a short training briefing. Tap a mode, then SKIP any time.</div>
+
+      <Picker label="Mode" value={m.title} onPrev={() => setMi((mi + MODES.length - 1) % MODES.length)} onNext={() => setMi((mi + 1) % MODES.length)} />
+      <p className="-mt-2 text-xs text-white/70">{m.goal}</p>
+      <Picker
+        label="Difficulty"
+        value={difficulty}
+        onPrev={() => setDifficulty(diffs[(diffs.indexOf(difficulty) + diffs.length - 1) % diffs.length])}
+        onNext={() => setDifficulty(diffs[(diffs.indexOf(difficulty) + 1) % diffs.length])}
+      />
+      <p className="-mt-2 text-xs text-white/70">{DIFFICULTY[difficulty].blurb}</p>
+
+      <button onClick={() => start(m.mode)} className="touch-target h-14 rounded-xl bg-scada-mint font-hud text-2xl font-bold uppercase tracking-widest text-scada-bg shadow-glow-mint">
+        Start
+      </button>
+      {best[bestKey(m.mode, difficulty)] ? <div className="-mt-2 text-center text-xs text-scada-amber">Best score ({difficulty}): {best[bestKey(m.mode, difficulty)].toLocaleString()}</div> : null}
+
+      <section className="rounded-2xl border border-white/10 bg-black/35 p-3 text-xs leading-5 text-white/80">
+        <div className="mb-1 font-hud text-sm font-bold uppercase tracking-widest text-scada-cobalt">How to play</div>
+        {m.mode === 'SOLO_CRISIS' ? (
+          <ul className="space-y-1">
+            <li>🎯 <b>Goal:</b> survive until 0:00 with fewer than 4 districts blacked out.</li>
+            <li>🟡 Pick up a repair kit at the <b>yellow</b> depot ring.</li>
+            <li>🟢 Deliver it to the <b>green</b> beam on the district in trouble.</li>
+            <li>⚡ In DISTRICT, set power ≥ what the district needs; cool it before 80°C.</li>
+          </ul>
+        ) : (
+          <ul className="space-y-1">
+            <li>🎯 <b>Goal:</b> vote out both saboteurs before 0:00 (3 wrong votes = loss).</li>
+            <li>📰 Compare engineer actions in NEWS with the SCADA sensor lines.</li>
+            <li>🔎 Inspect suspects (limited scans), flag them, then Vote out.</li>
+            <li>🚚 Keep your own district alive with the truck and the power slider.</li>
+          </ul>
+        )}
+        <div className="mt-2 border-t border-white/10 pt-2 text-white/60">{coarse ? 'Controls: on-screen joystick to drive.' : 'Controls: WASD / arrows drive · E horn · V camera · ? help.'} A short briefing plays on your first run.</div>
+      </section>
+
       {pwa.canPrompt && (
-        <button onClick={pwa.install} className="touch-target h-12 rounded border border-scada-cobalt text-xs font-bold text-scada-cobalt">INSTALL APP</button>
+        <button onClick={pwa.install} className="touch-target h-12 rounded-xl border border-scada-cobalt text-xs font-bold text-scada-cobalt">INSTALL APP</button>
       )}
       {pwa.iosHint && <div className="text-[11px] text-scada-dim">To install: tap Share, then “Add to Home Screen”.</div>}
       {pwa.offlineReady && <div className="text-[11px] text-scada-mint">● Offline ready — plays without a connection.</div>}

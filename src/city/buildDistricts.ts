@@ -21,6 +21,8 @@ export interface DistrictView {
   topY: number;
   anim: ((t: number, online: boolean) => void)[];
   intensity: number;
+  /** Solid footprints in group-local coordinates, for truck collisions. */
+  blockers: { x: number; z: number; hw: number; hd: number }[];
 }
 
 export function windowTexture(): THREE.CanvasTexture {
@@ -256,5 +258,17 @@ export function buildDistrict(id: DistrictId, tex: THREE.Texture): DistrictView 
   fx.position.set(0, 3, 0);
   group.add(fx);
 
-  return { id, group, wall, windowColor, accents, rim, light, fx, topY, anim, intensity: 1 };
+  const blockers: DistrictView['blockers'] = [];
+  for (const o of group.children) {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || m === pad || m === rimMesh) continue;
+    const gp = m.geometry;
+    if (gp instanceof THREE.BoxGeometry && gp.parameters.height > 0.3) {
+      blockers.push({ x: m.position.x, z: m.position.z, hw: gp.parameters.width / 2, hd: gp.parameters.depth / 2 });
+    } else if (gp instanceof THREE.CylinderGeometry && gp.parameters.height > 0.8 && gp.parameters.radiusTop >= 0.2) {
+      blockers.push({ x: m.position.x, z: m.position.z, hw: gp.parameters.radiusTop, hd: gp.parameters.radiusTop });
+    }
+  }
+
+  return { id, group, wall, windowColor, accents, rim, light, fx, topY, anim, intensity: 1, blockers };
 }

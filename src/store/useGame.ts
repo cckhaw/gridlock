@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { sound, vibrate } from '../audio/synth';
-import { applyAction, createInitialState, tickGame, voteIsolate } from '../engine/sim';
+import { resetTruck } from '../city/truck';
+import { applyAction, createInitialState, deliverKit, pickupKit, tickGame, voteIsolate } from '../engine/sim';
 import type { ActionType, ActiveTab, Difficulty, DistrictId, GameMode, GameSettings, GameState } from '../types/game';
 
 const SETTINGS_KEY = 'blackout-protocol:settings';
@@ -68,6 +69,10 @@ function markTutorialSeen(mode: GameMode) {
 interface Store {
   g: GameState;
   tutorialOpen: boolean;
+  cityView: 'CHASE' | 'OVERVIEW';
+  toggleView: () => void;
+  takeKit: () => void;
+  dropKit: (id: DistrictId) => void;
   openTutorial: () => void;
   closeTutorial: () => void;
   difficulty: Difficulty;
@@ -99,6 +104,24 @@ sound.setMuted(initialSettings.muted);
 export const useGame = create<Store>((set, get) => ({
   g: menuState(initialSettings),
   tutorialOpen: false,
+  cityView: 'CHASE',
+  toggleView: () => set({ cityView: get().cityView === 'CHASE' ? 'OVERVIEW' : 'CHASE' }),
+  takeKit: () => {
+    const g = get().g;
+    const next = pickupKit(g);
+    if (next === g) return;
+    sound.pickup();
+    vibrate(40, g.settings.haptics);
+    set({ g: next });
+  },
+  dropKit: (id) => {
+    const g = get().g;
+    const next = deliverKit(g, id);
+    if (next === g) return;
+    sound.deliver();
+    vibrate([40, 40, 80], g.settings.haptics);
+    set({ g: next });
+  },
   openTutorial: () => set({ tutorialOpen: true }),
   closeTutorial: () => {
     markTutorialSeen(get().g.mode);
@@ -132,6 +155,7 @@ export const useGame = create<Store>((set, get) => ({
   start: (mode) => {
     const settings = get().g.settings;
     sound.setMuted(settings.muted);
+    resetTruck();
     const g = createInitialState(mode, undefined, settings, get().difficulty);
     g.selectedNodeId = g.playerNodeId ?? 'downtown';
     set({ g, tutorialOpen: !tutorialSeen(mode) });
@@ -182,6 +206,7 @@ export const useGame = create<Store>((set, get) => ({
   },
 
   selectNode: (id, goFocus) => {
+    if (get().g.selectedNodeId === id && !goFocus) return;
     const g = { ...get().g, selectedNodeId: id };
     if (goFocus) g.activeTab = 'FOCUS';
     sound.click();

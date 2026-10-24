@@ -142,6 +142,7 @@ export function createInitialState(
   const s: GameState = {
     mode,
     difficulty,
+    crew: { credits: 0, deliveries: 0, revives: 0, hasKit: false, kitCooldown: 0 },
     stats: { healthSum: 0, minHealth: 100, coolantUses: 0, hazardsSeen: 0, peakTemp: 60 },
     phase: 'RUNNING',
     activeTab: 'GRID',
@@ -358,6 +359,8 @@ export function tickGame(prev: GameState): GameState {
   const rng = mulberry32(s.seed + s.tick * 9973 + 1);
   s.tick += 1;
   s.timeRemainingSec = Math.max(0, s.durationSec - s.tick);
+
+  if (s.crew.kitCooldown > 0) s.crew.kitCooldown -= 1;
 
   // 1. Hazards
   for (const h of s.hazards) h.remainingSec -= 1;
@@ -644,4 +647,117 @@ export function voteIsolate(prev: GameState, engineerId: string): GameState {
   s.reserveMW = computeReserve(s);
   evaluateEnd(s);
   return s;
+}
+
+// ---------------------------------------------------------------------------
+// Repair crew (the player's truck): pick up a kit at the depot, deliver to a district
+// ---------------------------------------------------------------------------
+
+export function needsHelp(s: GameState, n: DistrictNode): boolean {
+  if (n.status === 'BLACKOUT') return true;
+  if (n.isolated) return false;
+  if (n.status === 'CRITICAL' || n.status === 'CAUTION' || n.temperature >= 72) return true;
+  return s.hazards.some((h) => h.targetNodeId === n.id && h.type !== 'LIGHTNING_STRIKE');
+}
+
+/** Higher = more urgent. */
+export function urgency(s: GameState, n: DistrictNode): number {
+  if (!needsHelp(s, n)) return 0;
+  const base = n.status === 'BLACKOUT' ? 100 : n.status === 'CRITICAL' ? 80 : n.status === 'CAUTION' ? 40 : 20;
+  return base + Math.max(0, n.temperature - 60) + (100 - n.integrity) * 0.3 + n.baseLoad / 100;
+}
+
+/** Districts the crew may repair in this mode (deduction mode: only your own). */
+export function crewTargets(s: GameState): DistrictNode[] {
+  return nodeList(s).filter((n) => (s.mode === 'SOLO_CRISIS' ? true : n.ownerId === 'PLAYER'));
+}
+
+export function mostUrgent(s: GameState): DistrictNode | null {
+  let best: DistrictNode | null = null;
+  let score = 0;
+  for (const n of crewTargets(s)) {
+    const u = urgency(s, n);
+    if (u > score) {
+      score = u;
+      best = n;
+    }
+  }
+  return best;
+}
+
+export function pickupKit(prev: GameState): GameState {
+  if (prev.phase !== 'RUNNING' || prev.crew.hasKit || prev.crew.kitCooldown > 0) return prev;
+  const s: GameState = structuredClone(prev);
+  s.crew.hasKit = true;
+  addLog(s, 'INFO', 'SYSTEM', 'CREW', 'Repair kit loaded at the depot. Deliver it to a district in trouble.');
+  return s;
+}
+
+export function deliverKit(prev: GameState, id: DistrictId): GameState {
+  if (prev.phase !== 'RUNNING' || !prev.crew.hasKit) return prev;
+  const n0 = prev.nodes[id];
+  if (!crewTargets(prev).some((n) => n.id === id) || !needsHelp(prev, n0)) return prev;
+  const s: GameState = structuredClone(prev);
+  const n = s.nodes[id];
+  const name = nodeName(s, id);
+  const wasDark = n.status === 'BLACKOUT';
+  const wasCritical = n.status === 'CRITICAL';
+  if (wasDark) {
+    n.status = 'NOMINAL';
+    n.integrity = 60;
+    n.temperature = C.TEMP_NOMINAL;
+    n.redistributedLoad = 0;
+    n.demand = computeDemand(s, n, DISTRICT_ORDER.indexOf(id));
+    n.supply = 0;
+    s.crew.revives += 1;
+  } else {
+    n.integrity = Math.min(100, n.integrity + C.KIT_INTEGRITY);
+    n.temperature = Math.max(C.TEMP_NOMINAL, n.temperature - C.KIT_COOL);
+  }
+  n.coolantCooldown = 0;
+  s.hazards = s.hazards.filter((h) => !(h.targetNodeId === id && h.type !== 'LIGHTNING_STRIKE'));
+  // Crew also tops the district's power allocation up to its demand when spare power allows.
+  const want = Math.min(n.capacity, Math.ceil(n.demand) + 1);
+  if (n.supply < want) n.supply = Math.min(want, n.supply + Math.max(0, computeReserve(s)));
+  n.loggedSupply = n.supply;
+  const reward = C.KIT_BASE_CREDITS + (wasCritical ? 100 : 0) + (wasDark ? 200 : 0);
+  s.crew.credits += reward;
+  s.crew.deliveries += 1;
+  s.crew.hasKit = false;
+  s.crew.kitCooldown = C.KIT_COOLDOWN;
+  n.status = statusOf(n);
+  s.reserveMW = computeReserve(s);
+  addLog(s, 'INFO', 'SYSTEM', 'CREW', `Repair crew ${wasDark ? 'restored' : 'serviced'} ${name}. +${reward} credits.`, id);
+  addEvent(s, { kind: 'COOLANT', label: `Crew ${wasDark ? 'restored' : 'serviced'} ${name}`, nodeId: id });
+  return s;
+}
+
+export interface Objective {
+  kind: 'PICKUP' | 'DELIVER' | 'STANDBY' | 'INVESTIGATE';
+  title: string;
+  detail: string;
+  targetNodeId?: DistrictId;
+}
+
+export function currentObjective(s: GameState): Objective {
+  const target = mostUrgent(s);
+  if (s.mode === 'SABOTEUR_DEDUCTION') {
+    const caught = s.engineers.filter((e) => e.role === 'SABOTEUR' && e.isolated).length;
+    if (target && s.crew.hasKit) {
+      return { kind: 'DELIVER', title: `Deliver the kit to ${target.name}`, detail: 'Your own district needs help (green beam).', targetNodeId: target.id };
+    }
+    return {
+      kind: 'INVESTIGATE',
+      title: `Catch both saboteurs (${caught}/2)`,
+      detail: s.scansRemaining > 0 ? 'Read NEWS, Inspect suspects, then Vote out.' : 'Out of scans — rely on the NEWS log, then Vote out.',
+    };
+  }
+  if (target) {
+    return s.crew.hasKit
+      ? { kind: 'DELIVER', title: `Deliver the kit to ${target.name}`, detail: target.status === 'BLACKOUT' ? 'Lights are out — restore it!' : 'It is overheating — drive to the green beam.', targetNodeId: target.id }
+      : { kind: 'PICKUP', title: 'Pick up a repair kit at the DEPOT', detail: `${target.name} needs help. Drive into the yellow ring.` };
+  }
+  return s.crew.hasKit
+    ? { kind: 'STANDBY', title: 'Kit loaded — stand by', detail: 'Deliver it to the first district that raises an alert.' }
+    : { kind: 'PICKUP', title: 'Grab a repair kit at the DEPOT', detail: 'All quiet for now. Stock up before the next hazard.' };
 }

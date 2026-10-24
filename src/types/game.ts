@@ -165,6 +165,15 @@ export interface VoteResult {
   tick: number;
 }
 
+export interface CrewState {
+  credits: number;
+  deliveries: number;
+  revives: number;
+  hasKit: boolean;
+  /** Seconds until the depot has another repair kit. */
+  kitCooldown: number;
+}
+
 export interface GameSettings {
   crtScanlines: boolean;
   muted: boolean;
@@ -175,6 +184,7 @@ export interface GameState {
   mode: GameMode;
   difficulty: Difficulty;
   stats: RunStats;
+  crew: CrewState;
   phase: GamePhase;
   activeTab: ActiveTab;
   selectedNodeId: DistrictId;

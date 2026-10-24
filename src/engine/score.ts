@@ -41,6 +41,8 @@ export function computeScore(s: GameState): ScoreResult {
   } else if (win) {
     lines.push({ label: 'Storm survived', points: 1500 });
   }
+  lines.push({ label: 'Repair deliveries', points: s.crew.deliveries * 120 });
+  lines.push({ label: 'Districts restored', points: s.crew.revives * 250 });
   if (win) lines.push({ label: 'Clean sweep (no blackouts)', points: s.blackoutCount === 0 ? 1000 : 0 });
   const subtotal = Math.max(0, lines.reduce((a, l) => a + l.points, 0));
   const multiplier = DIFFICULTY[s.difficulty].scoreMult;
