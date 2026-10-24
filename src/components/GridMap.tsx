@@ -50,7 +50,7 @@ export default function GridMap() {
         const sel = n.id === selected;
         return (
           <g key={n.id} onClick={() => selectNode(n.id as DistrictId)} className="cursor-pointer">
-            {sel && <circle cx={p.x} cy={p.y} r={7.6} fill="none" stroke="#3A86FF" strokeWidth={0.5} strokeDasharray="1.5 1.5" />}
+            {sel && <circle cx={p.x} cy={p.y} r={7.6} fill="none" stroke="#0A84FF" strokeWidth={0.5} strokeDasharray="1.5 1.5" />}
             <circle
               cx={p.x} cy={p.y} r={5.4}
               fill="#131B2E" stroke={st.hex} strokeWidth={0.9}

@@ -5,9 +5,9 @@ import type { DistrictId, NodeStatus } from '../types/game';
 import { alertFromLog, type CityAlert } from './alertText';
 
 const DOT: Record<NodeStatus, string> = {
-  NOMINAL: 'bg-scada-mint',
-  CAUTION: 'bg-scada-amber',
-  CRITICAL: 'bg-scada-crimson animate-alarm-pulse',
+  NOMINAL: 'bg-[#30d158]',
+  CAUTION: 'bg-[#ff9f0a]',
+  CRITICAL: 'bg-[#ff453a] animate-alarm-pulse',
   BLACKOUT: 'bg-scada-dim',
   ISOLATED: 'bg-scada-cobalt',
 };
@@ -24,13 +24,11 @@ export function DistrictLabels() {
           <div key={id} data-anchor={id} data-kind="label" className="absolute left-0 top-0 will-change-transform" style={{ visibility: 'hidden' }}>
             <button
               onClick={() => selectNode(id)}
-              className={`pointer-events-auto flex min-h-8 items-center gap-1 rounded-full border px-2 py-1 text-[10px] sm:text-[11px] sm:gap-1.5 sm:px-2.5 font-semibold text-white shadow-lg backdrop-blur ${
-                selected === id ? 'border-scada-cobalt bg-scada-cobalt/40' : 'border-white/15 bg-black/55'
-              }`}
+              className={`glass pointer-events-auto relative flex min-h-8 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold text-white before:absolute before:-inset-x-1 before:-inset-y-2 before:content-[''] ${selected === id ? '!bg-[#0a84ff]/70' : ''}`}
             >
               <span className={`h-2 w-2 rounded-full ${DOT[n.status]}`} />
               {n.name.split(' ')[0]}
-              {n.ownerId === 'PLAYER' && useGame.getState().g.mode === 'SABOTEUR_DEDUCTION' ? <span className="text-scada-mint">· you</span> : null}
+              {n.ownerId === 'PLAYER' && useGame.getState().g.mode === 'SABOTEUR_DEDUCTION' ? <span className="text-white/70">· you</span> : null}
             </button>
           </div>
         );
@@ -40,9 +38,9 @@ export function DistrictLabels() {
 }
 
 const TONE = {
-  crit: 'border-scada-crimson bg-[#3a0a1c]/95 text-white shadow-glow-crimson',
-  warn: 'border-scada-amber bg-[#3a2a05]/95 text-white shadow-glow-amber',
-  info: 'border-scada-mint bg-[#04312c]/95 text-white shadow-glow-mint',
+  crit: 'bg-[#ff453a]/85',
+  warn: 'bg-[#ff9f0a]/85 text-black',
+  info: 'bg-[#30d158]/85 text-black',
 } as const;
 
 export function CityAlerts() {
@@ -78,7 +76,7 @@ export function CityAlerts() {
           <div key={a.key} data-anchor={a.nodeId} data-kind="alert" data-slot={slot} className="absolute left-0 top-0 will-change-transform" style={{ visibility: 'hidden' }}>
             <button
               onClick={() => selectNode(a.nodeId as DistrictId)}
-              className={`pointer-events-auto animate-pop-in flex max-w-[190px] items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-left text-xs font-bold ${TONE[a.tone]}`}
+              className={`pointer-events-auto animate-pop-in flex max-w-[210px] items-center gap-2 rounded-[18px] px-3 py-2 text-left text-[14px] font-semibold text-white shadow-xl backdrop-blur ${TONE[a.tone]}`}
             >
               <span className="text-base leading-none">{a.icon}</span>
               <span className="leading-tight">{a.text}</span>

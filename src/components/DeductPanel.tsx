@@ -1,45 +1,39 @@
 import { Flag, ScanSearch, ShieldAlert, ShieldCheck } from 'lucide-react';
-import { C } from '../engine/constants';
 import { useGame } from '../store/useGame';
 import type { AIEngineer } from '../types/game';
 
 const SCAN = {
-  UNSCANNED: { t: 'UNSCANNED', c: 'text-scada-dim' },
-  SCANNING: { t: 'SCANNING…', c: 'text-scada-amber' },
-  CLEAN: { t: 'CLEAN', c: 'text-scada-mint' },
-  ANOMALY: { t: 'ANOMALY', c: 'text-scada-crimson' },
+  UNSCANNED: { t: 'Not inspected', c: 'text-white/50' },
+  SCANNING: { t: 'Inspecting…', c: 'text-[#ff9f0a]' },
+  CLEAN: { t: 'Looks fine', c: 'text-[#30d158]' },
+  ANOMALY: { t: 'Something odd', c: 'text-[#ff453a]' },
 } as const;
 
-function Card({ e }: { e: AIEngineer }) {
+const AVATARS = ['#e8423a', '#3a6fe8', '#37b24d', '#f2c230', '#e36ad0', '#ff8a1f', '#39c9d6', '#f5f5f5'];
+
+function Row({ e, i }: { e: AIEngineer; i: number }) {
   const node = useGame((s) => s.g.nodes[e.nodeId]);
+  const selected = useGame((s) => s.g.selectedNodeId === e.nodeId);
   const logs = useGame((s) => s.g.logs);
   const flag = useGame((s) => s.flag);
   const selectNode = useGame((s) => s.selectNode);
-  const mine = logs.filter((l) => l.source === e.callsign).slice(-3);
+  const last = logs.filter((l) => l.source === e.callsign).slice(-2);
   const sc = SCAN[e.scanStatus];
   return (
-    <div className={`scada-panel flex flex-col gap-1.5 border p-2.5 ${e.flagged ? 'border-scada-amber' : ''} ${e.isolated ? 'opacity-70' : ''}`}>
-      <div className="flex items-center gap-2">
-        <button className="touch-target min-w-0 flex-1 text-left" onClick={() => selectNode(e.nodeId)}>
-          <div className="text-xs font-bold">{e.callsign} <span className="font-normal text-scada-dim">· {node.name}</span></div>
-          <div className={`text-[11px] font-bold ${sc.c}`}>{sc.t}</div>
-        </button>
-        {e.revealed ? (
-          e.role === 'SABOTEUR'
-            ? <span className="flex items-center gap-1 text-[11px] font-bold text-scada-crimson"><ShieldAlert size={16} />SABOTEUR</span>
-            : <span className="flex items-center gap-1 text-[11px] font-bold text-scada-mint"><ShieldCheck size={16} />INNOCENT</span>
-        ) : (
-          <button
-            className={`touch-target flex h-12 w-12 items-center justify-center rounded border ${e.flagged ? 'border-scada-amber text-scada-amber' : 'border-scada-border text-scada-dim'}`}
-            onClick={() => flag(e.id)} aria-label={`Flag ${e.callsign} as suspect`}
-          >
-            <Flag size={18} />
-          </button>
-        )}
-      </div>
-      <div className="min-h-[3.75rem] rounded bg-black/40 p-1.5 text-[10px] leading-4 text-scada-dim">
-        {mine.length ? mine.map((l) => <div key={l.id} className="truncate">[{l.timestamp}] {l.message}</div>) : 'No actions logged yet.'}
-      </div>
+    <div className={`group-row !items-start ${selected ? 'bg-white/8' : ''}`}>
+      <button className="touch-target flex min-w-0 flex-1 items-start gap-3 text-left" onClick={() => selectNode(e.nodeId)}>
+        <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-bold text-black/70" style={{ background: AVATARS[i % AVATARS.length] }}>{e.callsign.slice(-2)}</span>
+        <span className="min-w-0">
+          <span className="block text-[16px] font-semibold leading-tight">{e.callsign} <span className="font-normal text-white/55">· {node.name}</span></span>
+          <span className={`block text-[13px] ${sc.c}`}>{sc.t}</span>
+          {last.map((l) => <span key={l.id} className="block truncate text-[12px] text-white/50">{l.timestamp} {l.message}</span>)}
+        </span>
+      </button>
+      {e.revealed ? (
+        e.role === 'SABOTEUR' ? <span className="flex items-center gap-1 text-[13px] font-semibold text-[#ff453a]"><ShieldAlert size={16} />Saboteur</span> : <span className="flex items-center gap-1 text-[13px] font-semibold text-[#30d158]"><ShieldCheck size={16} />Innocent</span>
+      ) : (
+        <button className={`touch-target flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${e.flagged ? 'bg-[#ff9f0a] text-black' : 'bg-white/12 text-white/70'}`} onClick={() => flag(e.id)} aria-label={`Flag ${e.callsign} as suspect`} aria-pressed={e.flagged}><Flag size={18} /></button>
+      )}
     </div>
   );
 }
@@ -48,27 +42,28 @@ export default function DeductPanel() {
   const g = useGame((s) => s.g);
   if (g.mode !== 'SABOTEUR_DEDUCTION') {
     return (
-      <div className="scada-panel flex flex-col gap-2 p-3 text-xs">
-        <div className="flex items-center gap-2 font-bold text-scada-cobalt"><ScanSearch size={18} />Storm watch</div>
-        <p className="text-scada-dim">Active storm hazards:</p>
-        {g.hazards.length === 0 && <div className="text-scada-mint">All quiet — next hazard in ≤{g.nextHazardInSec}s</div>}
-        {g.hazards.map((h) => (
-          <div key={h.id} className="text-scada-amber">⚠ {h.type.replace('_', ' ')} @ {g.nodes[h.targetNodeId].shortName} · {h.remainingSec}s</div>
-        ))}
-        <div className="text-scada-dim">Blackouts: <span className="text-scada-crimson">{g.blackoutCount}/{g.defeatBlackouts}</span></div>
+      <div className="flex flex-col gap-3">
+        <div className="group-list">
+          <div className="group-row"><span className="flex items-center gap-2 text-[15px] font-semibold"><ScanSearch size={18} className="text-[#0a84ff]" />Storm watch</span></div>
+          {g.hazards.length === 0 && <div className="group-row text-[15px] text-[#30d158]">All quiet right now</div>}
+          {g.hazards.map((h) => (
+            <div key={h.id} className="group-row text-[15px] text-[#ffb340]"><span>⚠ {h.type.replace('_', ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())} · {g.nodes[h.targetNodeId].shortName}</span><span className="tabular-nums">{h.remainingSec}s</span></div>
+          ))}
+          <div className="group-row text-[15px]"><span>Blackouts</span><span className="font-semibold tabular-nums text-[#ff453a]">{g.blackoutCount}/{g.mode === 'PRACTICE' ? '∞' : g.defeatBlackouts}</span></div>
+        </div>
       </div>
     );
   }
   return (
-    <div className="flex flex-col gap-2">
-      <div className="scada-panel flex justify-between p-2 text-[11px]">
-        <span>SCANS <b className="text-scada-amber">{g.scansRemaining}</b></span>
-        <span>SABOTEURS <b className="text-scada-crimson">{g.engineers.filter((e) => e.role === 'SABOTEUR' && e.isolated).length}/2</b></span>
-        <span>ERRORS <b className="text-scada-crimson">{g.wrongVotes}/{C.MAX_WRONG_VOTES}</b></span>
+    <div className="flex flex-col gap-3">
+      <div className="group-list">
+        <div className="group-row"><span className="text-[15px]">Inspections left</span><b className="tabular-nums text-[#ff9f0a]">{g.scansRemaining}</b></div>
+        <div className="group-row"><span className="text-[15px]">Saboteurs caught</span><b className="tabular-nums text-[#30d158]">{g.engineers.filter((e) => e.role === 'SABOTEUR' && e.isolated).length}/2</b></div>
+        <div className="group-row"><span className="text-[15px]">Wrong votes</span><b className="tabular-nums text-[#ff453a]">{g.wrongVotes}/3</b></div>
       </div>
-      <div className="text-[11px] text-scada-dim">Select a roster node, then use DIAGNOSE or VOTE OUT (tap twice) in the action bar.</div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-        {g.engineers.map((e) => <Card key={e.id} e={e} />)}
+      <div className="px-1 text-[13px] leading-snug text-white/60">Tap an engineer, then use Inspect or Vote out (tap twice) in the District tab.</div>
+      <div className="group-list">
+        {g.engineers.map((e, i) => <Row key={e.id} e={e} i={i} />)}
       </div>
     </div>
   );
