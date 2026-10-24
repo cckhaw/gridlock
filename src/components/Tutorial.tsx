@@ -27,9 +27,9 @@ function soloSteps(): Step[] {
       title: 'You drive the repair truck',
       lead: touch() ? 'Drag the joystick (bottom-left of the city) to drive.' : 'Drive with W A S D.',
       bullets: [
-        touch() ? 'Push up to go forward, down to reverse, sideways to steer. Drag anywhere else on the city to look around; pinch to zoom.' : 'Arrow keys (or click-drag) pan the camera, scroll zooms, V returns to follow-cam. E honks, ? reopens this guide.',
+        touch() ? 'Push the stick the way you want to go on screen — the truck turns and drives that way. It stays on the streets. Drag anywhere else on the city to look around; pinch to zoom.' : 'W A S D move the truck the way you push on screen (W = up the screen). It stays on the streets. Arrow keys or click-drag pan the camera, scroll zooms, V returns to follow-cam, E honks.',
         'The minimap (bottom-right) shows districts, the depot and your truck.',
-        'Buildings are solid — use the streets between districts.',
+        'The truck stays on the streets and inside district grounds, so you cannot get lost.',
       ],
     },
     {

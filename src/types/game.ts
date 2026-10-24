@@ -186,6 +186,8 @@ export interface Assist {
 export interface PracticeState {
   /** Storm hazards strike on their own (otherwise only when you trigger them). */
   hazards: boolean;
+  /** Practice delivery destination (a healthy district chosen for the exercise). */
+  target: DistrictId | null;
   done: { kit: boolean; deliver: boolean; slider: boolean; cool: boolean; divert: boolean; hazard: boolean };
 }
 

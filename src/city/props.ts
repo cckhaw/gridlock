@@ -105,7 +105,7 @@ export function buildGround(scene: THREE.Scene) {
   const curb = lam(0xc9ced8);
   const dash = new THREE.MeshBasicMaterial({ color: 0xffe066 });
   const road = (len: number, horizontal: boolean, at: number, from = 0) => {
-    const w = 1.7;
+    const w = 2.4;
     const g = new THREE.Mesh(new THREE.BoxGeometry(horizontal ? len : w, 0.06, horizontal ? w : len), asphalt);
     g.position.set(horizontal ? from : at, 0.03, horizontal ? at : from);
     g.receiveShadow = true;
@@ -164,8 +164,8 @@ export function buildLamps() {
   const post = lam(0x2b3342);
   const headMat = new THREE.MeshBasicMaterial({ color: 0x777777 });
   const spots: [number, number][] = [];
-  for (const z of ROADS.horizontals) for (let x = -14; x <= 14; x += 4) spots.push([x, z + (x % 8 === 0 ? 1.25 : -1.25)]);
-  for (const x of ROADS.verticals) for (let z = -10; z <= 3; z += 4) spots.push([x + 1.25, z]);
+  for (const z of ROADS.horizontals) for (let x = -14; x <= 14; x += 4) spots.push([x, z + (x % 8 === 0 ? 1.7 : -1.7)]);
+  for (const x of ROADS.verticals) for (let z = -10; z <= 3; z += 4) spots.push([x + 1.7, z]);
   const posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.1, 1.5, 0.1), post, spots.length);
   const heads = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.14, 0.34), headMat, spots.length);
   const m4 = new THREE.Matrix4();
@@ -229,12 +229,12 @@ export function buildTraffic(scene: THREE.Scene) {
     cars.push(car);
   };
   for (const z of ROADS.horizontals) {
-    for (let i = 0; i < 2; i++) mkCar('x', 1, z + 0.42, -ROADS.hx, ROADS.hx);
-    for (let i = 0; i < 2; i++) mkCar('x', -1, z - 0.42, -ROADS.hx, ROADS.hx);
+    for (let i = 0; i < 2; i++) mkCar('x', 1, z + 0.6, -ROADS.hx, ROADS.hx);
+    for (let i = 0; i < 2; i++) mkCar('x', -1, z - 0.6, -ROADS.hx, ROADS.hx);
   }
   for (const x of ROADS.verticals) {
-    mkCar('z', 1, x - 0.42, ROADS.vz[0], ROADS.vz[1]);
-    mkCar('z', -1, x + 0.42, ROADS.vz[0], ROADS.vz[1]);
+    mkCar('z', 1, x - 0.6, ROADS.vz[0], ROADS.vz[1]);
+    mkCar('z', -1, x + 0.6, ROADS.vz[0], ROADS.vz[1]);
   }
   return {
     update(dt: number, night: number) {
