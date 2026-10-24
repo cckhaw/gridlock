@@ -19,8 +19,8 @@ import TabBar, { TAB_BAR_HEIGHT } from './ui/TabBar';
 function KeyHints() {
   return (
     <div className="glass pointer-events-auto hidden rounded-[18px] px-3 py-2 text-[13px] leading-5 text-white/80 mouse:block">
-      <b className="text-white">WASD</b> / arrows drive · <b className="text-white">E</b> horn<br />
-      <b className="text-white">V</b> camera · <b className="text-white">N</b> day / night · <b className="text-white">?</b> help
+      <b className="text-white">WASD</b> drive · <b className="text-white">Arrows</b> / drag pan · <b className="text-white">E</b> horn<br />
+      <b className="text-white">V</b> follow cam · <b className="text-white">N</b> day / night · <b className="text-white">?</b> help
     </div>
   );
 }
