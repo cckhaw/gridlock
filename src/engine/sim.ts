@@ -151,7 +151,7 @@ export function createInitialState(
     difficulty,
     assist: mode === 'PRACTICE' ? { autoBalance: true, autoCool: false } : { autoBalance: DIFFICULTY[difficulty].autoBalance, autoCool: DIFFICULTY[difficulty].autoCool },
     assistAllowed: mode === 'PRACTICE' || DIFFICULTY[difficulty].autoBalance,
-    practice: { hazards: false, done: { kit: false, deliver: false, slider: false, cool: false, divert: false, hazard: false } },
+    practice: { hazards: false, target: null, done: { kit: false, deliver: false, slider: false, cool: false, divert: false, hazard: false } },
     defeatBlackouts: mode === 'PRACTICE' ? 99 : DIFFICULTY[difficulty].defeatBlackouts,
     crew: { credits: 0, deliveries: 0, revives: 0, hasKit: false, kitCooldown: 0 },
     stats: { healthSum: 0, minHealth: 100, coolantUses: 0, hazardsSeen: 0, peakTemp: 60 },
@@ -719,11 +719,22 @@ export function mostUrgent(s: GameState): DistrictNode | null {
   return best;
 }
 
+/** True when the kit may be delivered here: the district needs help, or it is the practice destination. */
+export function canDeliver(s: GameState, id: DistrictId): boolean {
+  if (!s.crew.hasKit || !crewTargets(s).some((n) => n.id === id)) return false;
+  return needsHelp(s, s.nodes[id]) || (s.mode === 'PRACTICE' && s.practice.target === id);
+}
+
 export function pickupKit(prev: GameState): GameState {
   if (prev.phase !== 'RUNNING' || prev.crew.hasKit || prev.crew.kitCooldown > 0) return prev;
   const s: GameState = structuredClone(prev);
   s.crew.hasKit = true;
   s.practice.done.kit = true;
+  if (s.mode === 'PRACTICE') {
+    // Practice has no emergencies by default, so hand the learner a destination.
+    const order = DISTRICT_ORDER.filter((id) => s.nodes[id].status !== 'BLACKOUT');
+    s.practice.target = order[(s.crew.deliveries * 3 + 2) % order.length];
+  }
   addLog(s, 'INFO', 'SYSTEM', 'CREW', 'Repair kit loaded at the depot. Deliver it to a district in trouble.');
   return s;
 }
@@ -731,7 +742,7 @@ export function pickupKit(prev: GameState): GameState {
 export function deliverKit(prev: GameState, id: DistrictId): GameState {
   if (prev.phase !== 'RUNNING' || !prev.crew.hasKit) return prev;
   const n0 = prev.nodes[id];
-  if (!crewTargets(prev).some((n) => n.id === id) || !needsHelp(prev, n0)) return prev;
+  if (!canDeliver(prev, id) || !n0) return prev;
   const s: GameState = structuredClone(prev);
   const n = s.nodes[id];
   const name = nodeName(s, id);
@@ -760,6 +771,7 @@ export function deliverKit(prev: GameState, id: DistrictId): GameState {
   s.crew.deliveries += 1;
   s.practice.done.deliver = true;
   s.crew.hasKit = false;
+  s.practice.target = null;
   s.crew.kitCooldown = C.KIT_COOLDOWN;
   n.status = statusOf(n);
   s.reserveMW = computeReserve(s);
@@ -790,6 +802,10 @@ export function currentObjective(s: GameState): Objective {
   }
   if (s.mode === 'PRACTICE' && !target && !s.crew.hasKit && !s.practice.done.kit) {
     return { kind: 'PICKUP', title: 'Practice: drive into the yellow ring', detail: 'Follow the yellow arrow to the depot and load a repair kit. No timer — take your time!' };
+  }
+  if (s.mode === 'PRACTICE' && s.crew.hasKit && !target && s.practice.target) {
+    const t = s.nodes[s.practice.target];
+    return { kind: 'DELIVER', title: `Practice delivery: take the kit to ${t.name}`, detail: `Follow the green arrow to the ${t.shortName} district and drive into its green ring.`, targetNodeId: t.id };
   }
   if (target) {
     return s.crew.hasKit

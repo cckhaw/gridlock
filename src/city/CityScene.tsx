@@ -5,7 +5,7 @@ import { sound } from '../audio/synth';
 import GridMap from '../components/GridMap';
 import { DISTRICT_ORDER, GRID_EDGES } from '../engine/constants';
 import { mulberry32 } from '../engine/rng';
-import { crewTargets, currentObjective, needsHelp, progress } from '../engine/sim';
+import { canDeliver, currentObjective, progress } from '../engine/sim';
 import { autoNight, smooth } from './timeOfDay';
 import { useGame } from '../store/useGame';
 import type { DistrictId, HazardType, NodeStatus } from '../types/game';
@@ -127,8 +127,8 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
         return Math.abs(x - q.x) < PAD.w / 2 + m && Math.abs(z - q.z) < PAD.d / 2 + m;
       });
     const onRoad = (x: number, z: number) =>
-      ROADS.horizontals.some((r) => Math.abs(z - r) < 1.7) ||
-      (z > ROADS.vz[0] - 1 && z < ROADS.vz[1] + 1 && ROADS.verticals.some((r) => Math.abs(x - r) < 1.7)) ||
+      ROADS.horizontals.some((r) => Math.abs(z - r) < 2.2) ||
+      (z > ROADS.vz[0] - 1 && z < ROADS.vz[1] + 1 && ROADS.verticals.some((r) => Math.abs(x - r) < 2.2)) ||
       (Math.abs(x - DEPOT.x) < 3 && Math.abs(z - DEPOT.z) < 2.4);
     buildTrees(scene, (x, z) => inPad(x, z, 0.9) || onRoad(x, z), 90);
 
@@ -649,6 +649,8 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
 
       // --- truck, zones, beams and camera
       const running = g.phase === 'RUNNING' && !gs.tutorialOpen;
+      camera.getWorldDirection(fwd);
+      truck.camYaw = Math.atan2(fwd.x, fwd.z);
       if (running) stepTruck(dt, blockers);
       truckGroup.position.set(truck.x, 0, truck.z);
       truckGroup.rotation.y = truck.heading;
@@ -688,8 +690,9 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
           let px = (nx * 0.5 + 0.5) * w;
           let py = (-ny * 0.5 + 0.5) * h;
           const tall = h > w * 1.1;
-          const left = 70;
-          const rightEdge = w - 70;
+          const half = Math.min(w / 2 - 8, (ptrEl.offsetWidth || 160) / 2 + 8);
+          const left = half;
+          const rightEdge = w - half;
           const topM = tall ? h * 0.3 : 110;
           const botM = tall ? h * 0.56 : h - 110;
           const inside = !behind && px >= left && px <= rightEdge && py >= topM && py <= botM;
@@ -729,7 +732,7 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
           lastInside = inside;
           if (inside) gs.selectNode(inside);
         }
-        if (inside && g.crew.hasKit && crewTargets(g).some((n) => n.id === inside) && needsHelp(g, g.nodes[inside])) {
+        if (inside && canDeliver(g, inside)) {
           gs.dropKit(inside);
           lastAct = t;
         }
@@ -760,13 +763,13 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
       }
       controls.enabled = !chase;
       if (chase) {
-        const fx = Math.sin(truck.heading);
-        const fz = Math.cos(truck.heading);
+        // Follow camera with a fixed heading (screen-up is always the same way), so steering stays easy to read
         const tall = camera.aspect < 0.8;
-        const back = (tall ? 13.5 : 10.8) + Math.abs(truck.speed) * 0.35;
-        const want = tmp.set(truck.x - fx * back, (tall ? 10.5 : 8.2) + Math.abs(truck.speed) * 0.2, truck.z - fz * back);
-        camera.position.lerp(want, 1 - Math.pow(0.001, dt));
-        camera.lookAt(truck.x + fx * 4, 0.3, truck.z + fz * 4);
+        const back = (tall ? 12.5 : 9.5) + Math.abs(truck.speed) * 0.2;
+        const height = (tall ? 11.5 : 8.6) + Math.abs(truck.speed) * 0.15;
+        const want = tmp.set(truck.x, height, truck.z + back);
+        camera.position.lerp(want, 1 - Math.pow(0.002, dt));
+        camera.lookAt(truck.x, 0.3, truck.z - 3.2);
       } else {
         controls.update();
         clampTarget();

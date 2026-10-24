@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, createInitialState, currentObjective, deliverKit, pickupKit, tickGame, voteIsolate } from './sim';
+import { applyAction, canDeliver, createInitialState, currentObjective, deliverKit, pickupKit, tickGame, voteIsolate } from './sim';
 import type { GameState } from '../types/game';
 
 const run = (s: GameState, n: number) => {
@@ -154,5 +154,24 @@ describe('repair crew', () => {
     s.nodes[other].temperature = 99;
     expect(deliverKit(s, other)).toBe(s);
     expect(currentObjective(s).kind).toBe('INVESTIGATE');
+  });
+});
+
+describe('practice delivery', () => {
+  it('hands the learner a destination so the practice goals can be completed', () => {
+    let s = createInitialState('PRACTICE', 3);
+    expect(currentObjective(s).kind).toBe('PICKUP');
+    s = pickupKit(s);
+    const o = currentObjective(s);
+    expect(o.kind).toBe('DELIVER');
+    expect(o.targetNodeId).toBeTruthy();
+    const target = o.targetNodeId!;
+    const other = (['downtown', 'hospital', 'water'] as const).find((d) => d !== target)!;
+    expect(canDeliver(s, other)).toBe(false);
+    expect(canDeliver(s, target)).toBe(true);
+    s = deliverKit(s, target);
+    expect(s.practice.done.deliver).toBe(true);
+    expect(s.crew.credits).toBeGreaterThan(0);
+    expect(s.practice.target).toBeNull();
   });
 });
