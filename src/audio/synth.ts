@@ -1,7 +1,20 @@
 /** Tiny Web Audio synthesizer — no assets, lazily created on first user gesture. */
 let ctx: AudioContext | null = null;
 let muted = false;
-let drone: { osc: OscillatorNode; gain: GainNode } | null = null;
+
+/** Shared AudioContext (created on first call, resumed if suspended). Ignores the mute flag. */
+export function audioContext(): AudioContext | null {
+  try {
+    if (!ctx) {
+      const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      ctx = new Ctor();
+    }
+    if (ctx.state === 'suspended') void ctx.resume();
+    return ctx;
+  } catch {
+    return null;
+  }
+}
 
 function ac(): AudioContext | null {
   if (muted) return null;
@@ -54,7 +67,6 @@ function noise(dur: number, vol = 0.08, lowpass = 1200) {
 export const sound = {
   setMuted(m: boolean) {
     muted = m;
-    if (m) this.stopDrone();
   },
   click: () => tone(880, 0.04, 'square', 0.03),
   tab: () => tone(520, 0.05, 'triangle', 0.04),
@@ -91,27 +103,9 @@ export const sound = {
     tone(990, 0.16, 'triangle', 0.07, undefined, 0.1);
   },
   deliver: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.14, 'triangle', 0.06, undefined, i * 0.07)),
-  startDrone() {
-    const a = ac();
-    if (!a || drone) return;
-    const osc = a.createOscillator();
-    const gain = a.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.value = 50;
-    gain.gain.value = 0.015;
-    osc.connect(gain).connect(a.destination);
-    osc.start();
-    drone = { osc, gain };
-  },
-  stopDrone() {
-    if (!drone) return;
-    try {
-      drone.osc.stop();
-    } catch {
-      /* already stopped */
-    }
-    drone = null;
-  },
+  // Background music replaces the old synthesised drone.
+  startDrone() {},
+  stopDrone() {},
 };
 
 export function vibrate(pattern: number | number[], enabled: boolean) {

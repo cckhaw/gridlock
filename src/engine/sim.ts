@@ -113,7 +113,7 @@ const nodeName = (s: GameState, id: DistrictId) => s.nodes[id].name.toUpperCase(
 export function createInitialState(
   mode: GameMode,
   seed = Math.floor(Math.random() * 2 ** 31),
-  settings: GameState['settings'] = { crtScanlines: true, muted: false, haptics: true, timeOfDay: 'AUTO' },
+  settings: GameState['settings'] = { crtScanlines: true, muted: false, haptics: true, timeOfDay: 'AUTO', music: true },
   difficulty: Difficulty = 'OPERATOR',
 ): GameState {
   const rng = mulberry32(seed);
@@ -780,7 +780,7 @@ export function currentObjective(s: GameState): Objective {
   if (s.mode === 'SABOTEUR_DEDUCTION') {
     const caught = s.engineers.filter((e) => e.role === 'SABOTEUR' && e.isolated).length;
     if (target && s.crew.hasKit) {
-      return { kind: 'DELIVER', title: `Deliver the kit to ${target.name}`, detail: 'Your own district needs help (green beam).', targetNodeId: target.id };
+      return { kind: 'DELIVER', title: `Deliver the kit to ${target.name}`, detail: 'Your own district needs help. Follow the green arrow.', targetNodeId: target.id };
     }
     return {
       kind: 'INVESTIGATE',
@@ -789,16 +789,16 @@ export function currentObjective(s: GameState): Objective {
     };
   }
   if (s.mode === 'PRACTICE' && !target && !s.crew.hasKit && !s.practice.done.kit) {
-    return { kind: 'PICKUP', title: 'Practice: drive into the yellow ring', detail: 'Load a repair kit at the depot. No timer — take your time!' };
+    return { kind: 'PICKUP', title: 'Practice: drive into the yellow ring', detail: 'Follow the yellow arrow to the depot and load a repair kit. No timer — take your time!' };
   }
   if (target) {
     return s.crew.hasKit
-      ? { kind: 'DELIVER', title: `Deliver the kit to ${target.name}`, detail: target.status === 'BLACKOUT' ? 'Lights are out — restore it!' : 'It is overheating — drive to the green beam.', targetNodeId: target.id }
-      : { kind: 'PICKUP', title: 'Pick up a repair kit at the DEPOT', detail: `${target.name} needs help. Drive into the yellow ring.` };
+      ? { kind: 'DELIVER', title: `Deliver the kit to ${target.name}`, detail: `${target.status === 'BLACKOUT' ? 'Lights are out — restore it!' : 'It is overheating!'} Follow the green arrow to the ${target.shortName} district.`, targetNodeId: target.id }
+      : { kind: 'PICKUP', title: 'Pick up a repair kit at the DEPOT', detail: `${target.name} needs help. Follow the yellow arrow to the depot.` };
   }
   return s.crew.hasKit
     ? { kind: 'STANDBY', title: 'Kit loaded — stand by', detail: 'Deliver it to the first district that raises an alert.' }
-    : { kind: 'PICKUP', title: 'Grab a repair kit at the DEPOT', detail: 'All quiet for now. Stock up before the next hazard.' };
+    : { kind: 'PICKUP', title: 'Grab a repair kit at the DEPOT', detail: 'All quiet for now. Follow the yellow arrow to the depot and stock up.' };
 }
 
 // ---------------------------------------------------------------------------

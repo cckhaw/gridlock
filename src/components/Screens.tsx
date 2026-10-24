@@ -19,6 +19,8 @@ export function MenuScreen() {
   const setDifficulty = useGame((s) => s.setDifficulty);
   const best = useGame((s) => s.best);
   const pwa = useInstall();
+  const musicOn = useGame((s) => s.g.settings.music);
+  const toggleMusic = useGame((s) => s.toggleMusic);
   const [mi, setMi] = useState(() => (Object.keys(useGame.getState().best).length === 0 ? 0 : 1));
   const m = MODES[mi];
   const coarse = window.matchMedia('(pointer: coarse)').matches;
@@ -54,19 +56,24 @@ export function MenuScreen() {
           <div className="caption-label mb-1.5 px-1">How to play</div>
           <div className="group-list text-[15px] leading-snug">
             {(m.mode === 'PRACTICE'
-              ? ['🎓 No timer and you cannot lose. Explore freely.', '🟡 Drive into the yellow ring, then 🟢 the green beam.', '⚡ Drag the power slider in the District tab.', '⛈ Trigger a storm whenever you like.']
+              ? ['🎓 No timer and you cannot lose. Explore freely.', '🟡 Follow the yellow arrow to the depot, then 🟢 the green arrow to the district in trouble.', '⚡ Drag the power slider in the District tab.', '⛈ Trigger a storm whenever you like.']
               : m.mode === 'SOLO_CRISIS'
-                ? [`🎯 Survive until the clock hits 0:00 with fewer than ${DIFFICULTY[difficulty].defeatBlackouts} blackouts.`, '🟡 Pick up a repair kit at the yellow depot ring.', '🟢 Deliver it to the green beam on the district in trouble.', '⚡ Keep each district’s power at or above what it needs.']
+                ? [`🎯 Survive until the clock hits 0:00 with fewer than ${DIFFICULTY[difficulty].defeatBlackouts} blackouts.`, '🟡 Follow the yellow arrow to the depot and pick up a repair kit.', '🟢 Follow the green arrow to the district in trouble and drive into its green ring.', '⚡ Keep each district’s power at or above what it needs.']
                 : ['🎯 Vote out both saboteurs before 0:00 (3 wrong votes = loss).', '📰 Compare engineer actions in News with the sensor lines.', '🔎 Inspect suspects, flag them, then Vote out.', '🚚 Keep your own district alive with the truck.']
             ).map((t) => <div key={t} className="group-row !justify-start">{t}</div>)}
             <div className="group-row !justify-start text-[13px] text-white/55">{coarse ? 'Drive with the joystick. Drag the city to look around.' : 'WASD drive · arrow keys or drag to pan · E horn · V follow cam · N day/night · ? help'}</div>
           </div>
         </section>
 
+        <div className="group-list">
+          <div className="group-row"><span className="text-[15px]">Music</span><button role="switch" aria-checked={musicOn} aria-label="Music" onClick={toggleMusic} className="ios-switch touch-target" /></div>
+        </div>
+
         <div className="mt-auto flex flex-col items-center gap-2 pt-2 text-[13px] text-white/55">
           {pwa.canPrompt && <button onClick={pwa.install} className="btn-tinted w-full touch-target">Install app</button>}
           {pwa.iosHint && <div className="text-center">To install: tap <b>Share</b>, then <b>Add to Home Screen</b>.</div>}
           {pwa.offlineReady && <div className="text-[#30d158]">Ready to play offline</div>}
+          <div className="text-center text-[12px] text-white/40">Music by MintoDog, isaiah658, Hazmat Harry and Breadman (CC0, OpenGameArt.org)</div>
         </div>
       </div>
     </main>

@@ -6,9 +6,10 @@ import GridMap from '../components/GridMap';
 import { DISTRICT_ORDER, GRID_EDGES } from '../engine/constants';
 import { mulberry32 } from '../engine/rng';
 import { crewTargets, currentObjective, needsHelp, progress } from '../engine/sim';
+import { autoNight, smooth } from './timeOfDay';
 import { useGame } from '../store/useGame';
-import type { DistrictId, GameState, HazardType, NodeStatus } from '../types/game';
-import { CityAlerts, DistrictLabels } from './CityOverlay';
+import type { DistrictId, HazardType, NodeStatus } from '../types/game';
+import { CityAlerts, DistrictLabels, TargetPointer } from './CityOverlay';
 import { buildDistrict, PAD, type DistrictView } from './buildDistricts';
 import { animateCrewmate, buildGround, buildLamps, buildSky, buildSmoke, buildTraffic, buildTrees, lam, ROADS, type CrewMood } from './props';
 import { makeWallTextures } from './textures';
@@ -30,17 +31,6 @@ const FX: Record<HazardType, { color: number; i: number }> = {
   DEMAND_SURGE: { color: 0x33e0ff, i: 12 },
   HEATWAVE: { color: 0xff8a2a, i: 10 },
 };
-
-const smooth = (a: number, b: number, x: number) => {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
-
-/** Target night factor 0..1 for the AUTO day/night cycle. */
-function autoNight(g: GameState): number {
-  if (g.mode === 'PRACTICE') return smooth(0.35, 0.65, 0.5 - 0.5 * Math.cos((g.tick / 240) * Math.PI * 2));
-  return smooth(0.3, 0.72, progress(g));
-}
 
 const worldPos = (px: number, py: number) => new THREE.Vector3((px - 0.5) * WORLD.w, 0, (py - 0.5) * WORLD.d);
 
@@ -273,6 +263,17 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
     const { group: truckGroup, beaconMat, headMats, spot: truckSpot } = buildTruck();
     truckGroup.scale.setScalar(1.3);
     scene.add(truckGroup);
+    const guide = new THREE.Group();
+    const guideMat = new THREE.MeshBasicMaterial({ color: 0x30d158 });
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.12, 1.1), guideMat);
+    shaft.position.z = -0.1;
+    const head = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.8, 4), guideMat);
+    head.rotation.x = Math.PI / 2;
+    head.rotation.y = Math.PI / 4;
+    head.position.z = 0.75;
+    guide.add(shaft, head);
+    guide.visible = false;
+    scene.add(guide);
     const blockers = DISTRICT_ORDER.flatMap((id) => {
       const q = views[id].group.position;
       return views[id].blockers.map((b) => ({ x: q.x + b.x, z: q.z + b.z, hw: b.hw, hd: b.hd }));
@@ -668,6 +669,52 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
         (destRing.material as THREE.MeshBasicMaterial).opacity = 0.6 + 0.4 * Math.sin(t * 6);
         destRing.scale.setScalar(1 + 0.05 * Math.sin(t * 6));
       }
+      // Guidance: 3D arrow above the truck and an on-screen pointer toward the current target
+      const goalPos = tgt ?? (obj.kind === 'PICKUP' ? depot.position : null);
+      if (goalPos) {
+        const gdx = goalPos.x - truck.x;
+        const gdz = goalPos.z - truck.z;
+        const gd = Math.hypot(gdx, gdz);
+        guide.visible = gd > 3.5;
+        guide.position.set(truck.x, 2.7 + Math.sin(t * 5) * 0.12, truck.z);
+        guide.rotation.y = Math.atan2(gdx, gdz);
+        guideMat.color.setHex(obj.kind === 'DELIVER' ? 0x30d158 : 0xffd60a);
+        const ptrEl = overlay.current?.querySelector<HTMLElement>('[data-pointer]');
+        if (ptrEl) {
+          tmp.set(goalPos.x, obj.kind === 'DELIVER' ? 4.2 : 1.8, goalPos.z).project(camera);
+          const behind = tmp.z > 1;
+          const nx = behind ? -tmp.x : tmp.x;
+          const ny = behind ? -tmp.y : tmp.y;
+          let px = (nx * 0.5 + 0.5) * w;
+          let py = (-ny * 0.5 + 0.5) * h;
+          const tall = h > w * 1.1;
+          const left = 70;
+          const rightEdge = w - 70;
+          const topM = tall ? h * 0.3 : 110;
+          const botM = tall ? h * 0.56 : h - 110;
+          const inside = !behind && px >= left && px <= rightEdge && py >= topM && py <= botM;
+          const arrow = ptrEl.querySelector<HTMLElement>('[data-arrow]');
+          if (inside) {
+            if (arrow) arrow.style.transform = 'rotate(90deg)';
+            ptrEl.style.transform = `translate(${px.toFixed(1)}px, ${(py - 8).toFixed(1)}px) translate(-50%, -100%)`;
+          } else {
+            const cx = w / 2;
+            const cy = (topM + botM) / 2;
+            const dx = px - cx || 0.001;
+            const dy = py - cy || 0.001;
+            const s = Math.min(Math.abs(((dx > 0 ? rightEdge : left) - cx) / dx), Math.abs(((dy > 0 ? botM : topM) - cy) / dy));
+            px = cx + dx * s;
+            py = cy + dy * s;
+            if (arrow) arrow.style.transform = `rotate(${(Math.atan2(dy, dx) * 180) / Math.PI}deg)`;
+            ptrEl.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px) translate(-50%, -50%)`;
+          }
+          const distEl = ptrEl.querySelector<HTMLElement>('[data-dist]');
+          if (distEl) distEl.textContent = `${Math.round(gd * 4)} m`;
+          ptrEl.style.visibility = 'visible';
+        }
+      } else {
+        guide.visible = false;
+      }
       if (running && t - lastAct > 0.5) {
         if (Math.hypot(truck.x - DEPOT.x, truck.z - DEPOT.z) < DEPOT.r && !g.crew.hasKit && g.crew.kitCooldown <= 0) {
           gs.takeKit();
@@ -767,6 +814,7 @@ export default function CityScene({ bleed = false }: { bleed?: boolean }) {
       <div ref={overlay} className="pointer-events-none absolute inset-0 overflow-hidden">
         <DistrictLabels />
         <CityAlerts />
+        <TargetPointer />
       </div>
     </div>
   );

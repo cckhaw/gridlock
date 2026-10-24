@@ -1,4 +1,4 @@
-import { ChevronDown, CircleHelp, EyeOff, Home, Moon, Pause, Play, Sun, SunMoon, Video, Volume2, VolumeX } from 'lucide-react';
+import { ChevronDown, CircleHelp, EyeOff, Home, Moon, Music, Pause, Play, Sun, SunMoon, Video, Volume2, VolumeX } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { fmtTime } from '../engine/sim';
 import { useGame } from '../store/useGame';
@@ -27,7 +27,7 @@ function IconBtn({ label, onClick, children, active }: { label: string; onClick:
 export default function StatusCapsule() {
   const g = useGame((s) => s.g);
   const [open, setOpen] = useState(false);
-  const { togglePause, toggleMute, cycleTimeOfDay, toggleView, openTutorial, toggleUi, toMenu } = useGame.getState();
+  const { togglePause, toggleMute, toggleMusic, cycleTimeOfDay, toggleView, openTutorial, toggleUi, toMenu } = useGame.getState();
   const view = useGame((s) => s.cityView);
   const practice = g.mode === 'PRACTICE';
   const paused = g.phase === 'PAUSED';
@@ -52,6 +52,7 @@ export default function StatusCapsule() {
           <div className="flex flex-wrap gap-2">
             <IconBtn label={paused ? 'Resume' : 'Pause'} onClick={togglePause}>{paused ? <Play size={18} /> : <Pause size={18} />}</IconBtn>
             <IconBtn label={g.settings.muted ? 'Unmute' : 'Mute'} onClick={toggleMute}>{g.settings.muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</IconBtn>
+            <IconBtn label={g.settings.music ? 'Music on' : 'Music off'} onClick={toggleMusic} active={g.settings.music}><Music size={18} /></IconBtn>
             <IconBtn label={`Time of day: ${tod}`} onClick={cycleTimeOfDay}>{tod === 'DAY' ? <Sun size={18} /> : tod === 'NIGHT' ? <Moon size={18} /> : <SunMoon size={18} />}</IconBtn>
             <IconBtn label="Camera" onClick={toggleView} active={view === 'OVERVIEW'}><Video size={18} /></IconBtn>
             <IconBtn label="Hide interface" onClick={toggleUi}><EyeOff size={18} /></IconBtn>
