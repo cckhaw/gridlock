@@ -55,7 +55,7 @@ export default function DeductPanel() {
         {g.hazards.map((h) => (
           <div key={h.id} className="text-scada-amber">⚠ {h.type.replace('_', ' ')} @ {g.nodes[h.targetNodeId].shortName} · {h.remainingSec}s</div>
         ))}
-        <div className="text-scada-dim">Blackouts: <span className="text-scada-crimson">{g.blackoutCount}/{C.DEFEAT_BLACKOUTS}</span></div>
+        <div className="text-scada-dim">Blackouts: <span className="text-scada-crimson">{g.blackoutCount}/{g.defeatBlackouts}</span></div>
       </div>
     );
   }

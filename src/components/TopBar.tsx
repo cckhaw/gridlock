@@ -6,6 +6,7 @@ import { healthColor } from './ui';
 export default function TopBar() {
   const health = useGame((s) => s.g.gridHealth);
   const time = useGame((s) => s.g.timeRemainingSec);
+  const practice = useGame((s) => s.g.mode === 'PRACTICE');
   const muted = useGame((s) => s.g.settings.muted);
   const crt = useGame((s) => s.g.settings.crtScanlines);
   const paused = useGame((s) => s.g.phase === 'PAUSED');
@@ -29,8 +30,8 @@ export default function TopBar() {
         </div>
         <div className="mt-0.5 text-[10px] text-scada-dim">Spare power <span className="text-scada-cobalt">{reserve} MW</span></div>
       </div>
-      <div className={`font-mono font-bold tabular-nums text-xl xs:text-2xl ${time <= 30 ? 'text-scada-crimson text-glow-crimson' : 'text-scada-mint text-glow-mint'}`}>
-        {fmtTime(time)}
+      <div className={`font-mono font-bold tabular-nums text-xl xs:text-2xl ${!practice && time <= 30 ? 'text-scada-crimson text-glow-crimson' : 'text-scada-mint text-glow-mint'}`}>
+        {practice ? '∞' : fmtTime(time)}
       </div>
       <button className={btn} onClick={togglePause} aria-label={paused ? 'Resume' : 'Pause'}>
         {paused ? <Play size={20} /> : <Pause size={20} />}

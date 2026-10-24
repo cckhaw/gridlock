@@ -74,9 +74,16 @@ export function effectiveSupply(s: GameState, n: DistrictNode): number {
   return n.supply * f;
 }
 
+/** 0..1 storm progress (practice mode ramps gently over ten minutes and stays mild). */
+export function progress(s: GameState): number {
+  return s.mode === 'PRACTICE' ? Math.min(1, s.tick / 600) * 0.4 : Math.min(1, s.tick / s.durationSec);
+}
+
+const modeKey = (m: GameMode) => (m === 'SABOTEUR_DEDUCTION' ? 'SABOTEUR_DEDUCTION' : 'SOLO_CRISIS');
+
 function weatherDrift(s: GameState, n: DistrictNode, idx: number): number {
-  const ramp = DIFFICULTY[s.difficulty].ramp[s.mode];
-  return n.baseLoad * (0.03 * Math.sin(s.tick / 8 + idx * 1.3) + ramp * (s.tick / s.durationSec));
+  const ramp = DIFFICULTY[s.difficulty].ramp[modeKey(s.mode)];
+  return n.baseLoad * (0.03 * Math.sin(s.tick / 8 + idx * 1.3) + ramp * progress(s));
 }
 
 function computeDemand(s: GameState, n: DistrictNode, idx: number): number {
@@ -106,7 +113,7 @@ const nodeName = (s: GameState, id: DistrictId) => s.nodes[id].name.toUpperCase(
 export function createInitialState(
   mode: GameMode,
   seed = Math.floor(Math.random() * 2 ** 31),
-  settings = { crtScanlines: true, muted: false, haptics: true },
+  settings: GameState['settings'] = { crtScanlines: true, muted: false, haptics: true, timeOfDay: 'AUTO' },
   difficulty: Difficulty = 'OPERATOR',
 ): GameState {
   const rng = mulberry32(seed);
@@ -142,21 +149,25 @@ export function createInitialState(
   const s: GameState = {
     mode,
     difficulty,
+    assist: mode === 'PRACTICE' ? { autoBalance: true, autoCool: false } : { autoBalance: DIFFICULTY[difficulty].autoBalance, autoCool: DIFFICULTY[difficulty].autoCool },
+    assistAllowed: mode === 'PRACTICE' || DIFFICULTY[difficulty].autoBalance,
+    practice: { hazards: false, done: { kit: false, deliver: false, slider: false, cool: false, divert: false, hazard: false } },
+    defeatBlackouts: mode === 'PRACTICE' ? 99 : DIFFICULTY[difficulty].defeatBlackouts,
     crew: { credits: 0, deliveries: 0, revives: 0, hasKit: false, kitCooldown: 0 },
     stats: { healthSum: 0, minHealth: 100, coolantUses: 0, hazardsSeen: 0, peakTemp: 60 },
     phase: 'RUNNING',
     activeTab: 'GRID',
     selectedNodeId: 'downtown',
     tick: 0,
-    durationSec: C.DURATION_SEC,
-    timeRemainingSec: C.DURATION_SEC,
+    durationSec: mode === 'PRACTICE' ? 1e9 : DIFFICULTY[difficulty].duration,
+    timeRemainingSec: mode === 'PRACTICE' ? 1e9 : DIFFICULTY[difficulty].duration,
     nodes,
     generationMW: 0,
     reserveMW: 0,
     gridHealth: 100,
     blackoutCount: 0,
     hazards: [],
-    nextHazardInSec: C.FIRST_HAZARD_SEC,
+    nextHazardInSec: mode === 'PRACTICE' ? 60 : DIFFICULTY[difficulty].firstHazard,
     logs: [],
     logCounter: 0,
     history: [],
@@ -180,7 +191,7 @@ export function createInitialState(
     n.loggedSupply = n.supply;
   });
   const total = nodeList(s).reduce((a, n) => a + n.supply, 0);
-  const factor = DIFFICULTY[difficulty].reserveFactor[mode];
+  const factor = mode === 'PRACTICE' ? 1.25 : DIFFICULTY[difficulty].reserveFactor[mode];
   s.generationMW = Math.round((total * factor) / 10) * 10;
   s.reserveMW = computeReserve(s);
 
@@ -229,7 +240,8 @@ function spawnHazard(s: GameState, rng: () => number) {
   const online = nodeList(s).filter(isOnline);
   if (!online.length) return;
   const target = pick(rng, online);
-  const esc = (1 + 0.6 * (s.tick / s.durationSec)) * DIFFICULTY[s.difficulty].hazardScale;
+  const esc = (1 + 0.6 * progress(s)) * (s.mode === 'PRACTICE' ? 0.6 : DIFFICULTY[s.difficulty].hazardScale);
+  s.practice.done.hazard = true;
   s.stats.hazardsSeen += 1;
   const roll = rng();
   const base = { id: `H${s.tick}-${target.id}`, targetNodeId: target.id, startedAtTick: s.tick };
@@ -367,8 +379,9 @@ export function tickGame(prev: GameState): GameState {
   s.hazards = s.hazards.filter((h) => h.remainingSec > 0);
   s.nextHazardInSec -= 1;
   if (s.nextHazardInSec <= 0) {
-    spawnHazard(s, rng);
-    s.nextHazardInSec = C.HAZARD_MIN_SEC + Math.floor(rng() * (C.HAZARD_MAX_SEC - C.HAZARD_MIN_SEC + 1));
+    if (s.mode !== 'PRACTICE' || s.practice.hazards) spawnHazard(s, rng);
+    const [gmin, gmax] = s.mode === 'PRACTICE' ? [45, 60] : DIFFICULTY[s.difficulty].hazardGap;
+    s.nextHazardInSec = gmin + Math.floor(rng() * (gmax - gmin + 1));
   }
 
   // 2. Demand
@@ -378,6 +391,23 @@ export function tickGame(prev: GameState): GameState {
 
   // 3. AI engineers
   if (s.mode === 'SABOTEUR_DEDUCTION') for (const e of s.engineers) runEngineer(s, e, rng);
+
+  // 3b. Autopilot assist for the player's districts (Cadet and Practice)
+  if (s.assist.autoBalance || s.assist.autoCool) {
+    for (const n of nodeList(s)) {
+      if (n.ownerId !== 'PLAYER' || !isOnline(n)) continue;
+      if (s.assist.autoBalance) {
+        const want = Math.min(n.capacity, Math.ceil(n.demand) + 1);
+        const diff = want - n.supply;
+        if (Math.abs(diff) >= 1) n.supply += diff > 0 ? Math.min(diff, Math.max(0, computeReserve(s))) : diff;
+      }
+      if (s.assist.autoCool && n.temperature >= 75 && !n.coolantActive && n.coolantCooldown <= 0 && computeReserve(s) >= C.COOLANT_COST_MW) {
+        n.coolantActive = true;
+        n.coolantRemaining = C.COOLANT_DURATION;
+        n.coolantCooldown = C.COOLANT_COOLDOWN;
+      }
+    }
+  }
 
   // 4. Physics
   const prevStatus: Record<string, NodeStatus> = {};
@@ -498,7 +528,8 @@ function evaluateEnd(s: GameState) {
     s.endReason = reason;
     addLog(s, phase === 'VICTORY' ? 'INFO' : 'CRIT', 'SYSTEM', 'SCADA', reason);
   };
-  if (s.blackoutCount >= C.DEFEAT_BLACKOUTS) return end('DEFEAT', `Grid collapse: ${s.blackoutCount} districts blacked out.`);
+  if (s.mode === 'PRACTICE') return;
+  if (s.blackoutCount >= s.defeatBlackouts) return end('DEFEAT', `Grid collapse: ${s.blackoutCount} districts blacked out.`);
   if (s.gridHealth < 10) return end('DEFEAT', 'Grid health critical. Total system failure.');
   if (s.mode === 'SABOTEUR_DEDUCTION') {
     if (s.engineers.filter((e) => e.role === 'SABOTEUR').every((e) => e.isolated)) {
@@ -545,6 +576,7 @@ export function applyAction(prev: GameState, a: PlayerAction): GameState {
       const want = clamp(Math.round(a.amountMW ?? n.supply), 0, n.capacity);
       const room = computeReserve(s) + n.supply;
       n.supply = Math.min(want, room);
+      s.practice.done.slider = true;
       if (deduction && Math.abs(n.supply - n.loggedSupply) >= 20) {
         n.loggedSupply = n.supply;
         addLog(s, 'INFO', 'ALLOCATION', 'PLAYER', `PLAYER set ${name} allocation to ${n.supply} MW`, n.id);
@@ -557,6 +589,7 @@ export function applyAction(prev: GameState, a: PlayerAction): GameState {
       n.coolantRemaining = C.COOLANT_DURATION;
       n.coolantCooldown = C.COOLANT_COOLDOWN;
       s.stats.coolantUses += 1;
+      s.practice.done.cool = true;
       addLog(s, 'INFO', 'COOLANT', 'PLAYER', `PLAYER COOLANT FLUSH on ${name} at ${Math.round(n.temperature)}°C`, n.id);
       break;
     }
@@ -584,6 +617,7 @@ export function applyAction(prev: GameState, a: PlayerAction): GameState {
         return s;
       }
       n.supply += got;
+      s.practice.done.divert = true;
       if (deduction) n.loggedSupply = n.supply;
       addLog(s, 'INFO', 'ALLOCATION', 'PLAYER', `PLAYER rerouted +${got} MW to ${name}`, n.id);
       break;
@@ -669,7 +703,7 @@ export function urgency(s: GameState, n: DistrictNode): number {
 
 /** Districts the crew may repair in this mode (deduction mode: only your own). */
 export function crewTargets(s: GameState): DistrictNode[] {
-  return nodeList(s).filter((n) => (s.mode === 'SOLO_CRISIS' ? true : n.ownerId === 'PLAYER'));
+  return nodeList(s).filter((n) => (s.mode !== 'SABOTEUR_DEDUCTION' ? true : n.ownerId === 'PLAYER'));
 }
 
 export function mostUrgent(s: GameState): DistrictNode | null {
@@ -689,6 +723,7 @@ export function pickupKit(prev: GameState): GameState {
   if (prev.phase !== 'RUNNING' || prev.crew.hasKit || prev.crew.kitCooldown > 0) return prev;
   const s: GameState = structuredClone(prev);
   s.crew.hasKit = true;
+  s.practice.done.kit = true;
   addLog(s, 'INFO', 'SYSTEM', 'CREW', 'Repair kit loaded at the depot. Deliver it to a district in trouble.');
   return s;
 }
@@ -723,6 +758,7 @@ export function deliverKit(prev: GameState, id: DistrictId): GameState {
   const reward = C.KIT_BASE_CREDITS + (wasCritical ? 100 : 0) + (wasDark ? 200 : 0);
   s.crew.credits += reward;
   s.crew.deliveries += 1;
+  s.practice.done.deliver = true;
   s.crew.hasKit = false;
   s.crew.kitCooldown = C.KIT_COOLDOWN;
   n.status = statusOf(n);
@@ -752,6 +788,9 @@ export function currentObjective(s: GameState): Objective {
       detail: s.scansRemaining > 0 ? 'Read NEWS, Inspect suspects, then Vote out.' : 'Out of scans — rely on the NEWS log, then Vote out.',
     };
   }
+  if (s.mode === 'PRACTICE' && !target && !s.crew.hasKit && !s.practice.done.kit) {
+    return { kind: 'PICKUP', title: 'Practice: drive into the yellow ring', detail: 'Load a repair kit at the depot. No timer — take your time!' };
+  }
   if (target) {
     return s.crew.hasKit
       ? { kind: 'DELIVER', title: `Deliver the kit to ${target.name}`, detail: target.status === 'BLACKOUT' ? 'Lights are out — restore it!' : 'It is overheating — drive to the green beam.', targetNodeId: target.id }
@@ -760,4 +799,26 @@ export function currentObjective(s: GameState): Objective {
   return s.crew.hasKit
     ? { kind: 'STANDBY', title: 'Kit loaded — stand by', detail: 'Deliver it to the first district that raises an alert.' }
     : { kind: 'PICKUP', title: 'Grab a repair kit at the DEPOT', detail: 'All quiet for now. Stock up before the next hazard.' };
+}
+
+// ---------------------------------------------------------------------------
+// Practice / assist helpers
+// ---------------------------------------------------------------------------
+
+export function setAssist(prev: GameState, patch: Partial<GameState['assist']>): GameState {
+  if (!prev.assistAllowed) return prev;
+  return { ...prev, assist: { ...prev.assist, ...patch } };
+}
+
+export function setPracticeHazards(prev: GameState, on: boolean): GameState {
+  if (prev.mode !== 'PRACTICE') return prev;
+  return { ...prev, practice: { ...prev.practice, hazards: on } };
+}
+
+/** Practice only: strike the city with a storm hazard right now. */
+export function triggerHazard(prev: GameState): GameState {
+  if (prev.mode !== 'PRACTICE' || prev.phase !== 'RUNNING') return prev;
+  const s: GameState = structuredClone(prev);
+  spawnHazard(s, mulberry32(s.seed + s.tick * 31 + s.logCounter));
+  return s;
 }

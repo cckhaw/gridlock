@@ -1,4 +1,4 @@
-import { CircleHelp, Video } from 'lucide-react';
+import { CircleHelp, Moon, Sun, SunMoon, Video } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { DISTRICT_ORDER } from '../engine/constants';
 import { currentObjective } from '../engine/sim';
@@ -37,6 +37,45 @@ function Stats() {
       <span className="rounded-lg bg-black/65 px-2 py-1 text-[#ffd400]">💰 {crew.credits}</span>
       <span className="rounded-lg bg-black/65 px-2 py-1 text-white">🔧 {crew.deliveries}</span>
       <span className={`rounded-lg bg-black/65 px-2 py-1 ${crew.hasKit ? 'text-[#00ff88]' : 'text-white/70'}`}>{mode === 'SOLO_CRISIS' || crew.hasKit ? kit : kit}</span>
+    </div>
+  );
+}
+
+const GOALS: [keyof import('../types/game').PracticeState['done'], string][] = [
+  ['kit', 'Load a repair kit at the yellow depot'],
+  ['deliver', 'Deliver it to a green-beam district'],
+  ['slider', 'Change a district’s power slider (turn Autopilot off first)'],
+  ['cool', 'Press Cool down on a hot district'],
+  ['divert', 'Press Divert to move spare power'],
+  ['hazard', 'Trigger a storm and survive it'],
+];
+
+function PracticeTools({ top }: { top: number }) {
+  const g = useGame((s) => s.g);
+  const strike = useGame((s) => s.strike);
+  const practiceHazards = useGame((s) => s.practiceHazards);
+  const patchAssist = useGame((s) => s.patchAssist);
+  const start = useGame((s) => s.start);
+  const [open, setOpen] = useState(() => window.innerWidth >= 900);
+  if (g.mode !== 'PRACTICE') return null;
+  const done = GOALS.filter(([k]) => g.practice.done[k]).length;
+  const chip = 'pointer-events-auto touch-target min-h-10 rounded-lg border border-white/20 bg-black/55 px-2.5 text-[11px] font-bold text-white';
+  return (
+    <div className="pointer-events-none absolute left-2 flex w-[230px] max-w-[60%] flex-col gap-1.5" style={{ top: top + 78 }}>
+      <button className={`${chip} text-left text-scada-mint`} onClick={() => setOpen(!open)}>🎓 Practice goals {done}/{GOALS.length} {open ? '▾' : '▸'}</button>
+      {open && (
+        <div className="pointer-events-auto rounded-xl border border-white/15 bg-black/65 p-2 text-[11px] leading-4 backdrop-blur">
+          {GOALS.map(([k, label]) => (
+            <div key={k} className={g.practice.done[k] ? 'text-scada-mint' : 'text-white/75'}>{g.practice.done[k] ? '✅' : '⬜'} {label}</div>
+          ))}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button className={chip} onClick={strike}>⛈ Trigger storm</button>
+            <button className={chip} onClick={() => practiceHazards(!g.practice.hazards)}>Auto storms: {g.practice.hazards ? 'ON' : 'OFF'}</button>
+            <button className={chip} onClick={() => patchAssist({ autoBalance: !g.assist.autoBalance })}>Autopilot: {g.assist.autoBalance ? 'ON' : 'OFF'}</button>
+            <button className={chip} onClick={() => start('PRACTICE')}>↺ Reset city</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -161,12 +200,15 @@ function Joystick() {
 export default function CityHud({ topOffset }: { topOffset: number }) {
   const view = useGame((s) => s.cityView);
   const toggleView = useGame((s) => s.toggleView);
+  const tod = useGame((s) => s.g.settings.timeOfDay);
+  const cycleTod = useGame((s) => s.cycleTimeOfDay);
   const openTutorial = useGame((s) => s.openTutorial);
   const coarse = useMemo(() => window.matchMedia('(pointer: coarse)').matches, []);
   const btn = 'pointer-events-auto touch-target flex h-12 w-12 items-center justify-center rounded-xl border border-white/25 bg-black/60 text-white backdrop-blur';
   return (
     <>
       <Objective top={topOffset} />
+      <PracticeTools top={topOffset} />
       <div className="pointer-events-none absolute bottom-2 left-2 flex flex-col gap-2">
         {coarse ? <Joystick /> : (
           <div className="rounded-lg bg-black/60 px-2.5 py-1.5 font-hud text-xs uppercase leading-5 tracking-wide text-white/80">
@@ -177,6 +219,7 @@ export default function CityHud({ topOffset }: { topOffset: number }) {
       </div>
       <div className="pointer-events-none absolute bottom-2 right-2 flex items-end gap-2">
         <div className="flex flex-col gap-2">
+          <button className={btn} onClick={cycleTod} aria-label={`Time of day: ${tod}`} title="Day / night (N)">{tod === 'DAY' ? <Sun size={20} className="text-[#ffd400]" /> : tod === 'NIGHT' ? <Moon size={20} className="text-[#b8c8ff]" /> : <SunMoon size={20} />}</button>
           <button className={btn} onClick={toggleView} aria-label="Switch camera view" title="Camera (V)"><Video size={20} className={view === 'OVERVIEW' ? 'text-scada-cobalt' : ''} /></button>
           <button className={btn} onClick={openTutorial} aria-label="How to play" title="How to play (?)"><CircleHelp size={20} /></button>
         </div>

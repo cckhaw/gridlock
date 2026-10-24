@@ -57,6 +57,7 @@ function soloSteps(): Step[] {
         'A short district heats up +1.5°C every second.',
         'Spare power is shared by the whole city — you cannot give everyone extra.',
         'Divert pulls spare power from neighbours into this district.',
+        'On Cadet (and Practice) an Autopilot switch in the DISTRICT tab does the balancing and cooling for you — switch it off to try it by hand.',
       ],
       tab: 'FOCUS',
     },
@@ -91,6 +92,25 @@ function soloSteps(): Step[] {
       bullets: ['Points: survival time, average city power, blackouts avoided, repairs delivered and districts restored.', 'Veteran difficulty multiplies your score. Ready? Pick up that first kit.'],
       tab: 'GRID',
     },
+  ];
+}
+
+function practiceSteps(): Step[] {
+  const base = soloSteps();
+  return [
+    {
+      icon: '🎓',
+      title: 'Practice mode',
+      lead: 'There is no timer and you cannot lose. Explore the game at your own pace.',
+      bullets: [
+        'Autopilot is ON, so the city keeps itself balanced while you learn to drive and deliver.',
+        'Follow the 🎓 Practice goals list on the left of the city — it ticks off as you try each thing.',
+        'Use ⛈ Trigger storm whenever you want to see a hazard and practise fixing it.',
+        'Turn Autopilot OFF to practise the power slider and Cool down yourself.',
+      ],
+      tab: 'GRID',
+    },
+    ...base.slice(1, 6),
   ];
 }
 
@@ -170,7 +190,7 @@ export default function Tutorial() {
   const mode = useGame((s) => s.g.mode);
   const close = useGame((s) => s.closeTutorial);
   const setTab = useGame((s) => s.setTab);
-  const steps = useMemo(() => (mode === 'SABOTEUR_DEDUCTION' ? deductionSteps() : soloSteps()), [mode]);
+  const steps = useMemo(() => (mode === 'SABOTEUR_DEDUCTION' ? deductionSteps() : mode === 'PRACTICE' ? practiceSteps() : soloSteps()), [mode]);
   const [i, setI] = useState(0);
   const step = steps[i];
   const last = i === steps.length - 1;

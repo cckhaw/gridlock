@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeScore } from './score';
-import { applyAction, createInitialState, nodeList, tickGame } from './sim';
+import { applyAction, createInitialState, nodeList, setAssist, setPracticeHazards, tickGame, triggerHazard } from './sim';
 import type { Difficulty, GameState } from '../types/game';
 
 /** A player limited to `apm` actions per second, prioritising the most urgent node. */
@@ -46,12 +46,41 @@ describe('difficulty balance (solo, attentive player)', () => {
     expect(veteran).toBeGreaterThan(0);
   });
 
-  it('a passive player always loses', () => {
-    for (const d of ['CADET', 'OPERATOR', 'VETERAN'] as Difficulty[]) {
+  it('a passive player loses on Operator/Veteran but sails through Cadet (autopilot)', () => {
+    for (const d of ['OPERATOR', 'VETERAN'] as Difficulty[]) {
       let s = createInitialState('SOLO_CRISIS', 1, undefined, d);
       while (s.phase === 'RUNNING') s = tickGame(s);
       expect(s.phase).toBe('DEFEAT');
     }
+    for (let seed = 1; seed <= 12; seed++) {
+      let s = createInitialState('SOLO_CRISIS', seed, undefined, 'CADET');
+      while (s.phase === 'RUNNING') s = tickGame(s);
+      expect(s.phase).toBe('VICTORY');
+      expect(s.blackoutCount).toBe(0);
+    }
+  });
+});
+
+describe('practice mode', () => {
+  it('has no clock, never ends, and hazards only strike when triggered', () => {
+    let s = createInitialState('PRACTICE', 3);
+    for (let i = 0; i < 900; i++) s = tickGame(s);
+    expect(s.phase).toBe('RUNNING');
+    expect(s.logs.some((l) => l.category === 'HAZARD')).toBe(false);
+    s = triggerHazard(s);
+    expect(s.logs.some((l) => l.category === 'HAZARD')).toBe(true);
+    expect(s.practice.done.hazard).toBe(true);
+    s = setPracticeHazards(s, true);
+    expect(s.practice.hazards).toBe(true);
+  });
+
+  it('autopilot can be toggled off in practice and tracks checklist progress', () => {
+    let s = createInitialState('PRACTICE', 3);
+    expect(s.assist.autoBalance).toBe(true);
+    s = setAssist(s, { autoBalance: false });
+    s = applyAction(s, { type: 'SET_SUPPLY', nodeId: 'water', amountMW: 200 });
+    expect(s.practice.done.slider).toBe(true);
+    expect(setAssist(createInitialState('SOLO_CRISIS', 3, undefined, 'OPERATOR'), { autoBalance: true }).assist.autoBalance).toBe(false);
   });
 });
 

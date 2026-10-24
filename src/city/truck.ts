@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildCrewmate } from './props';
 
 /** Shared, mutable truck state (updated every frame by the scene, read by the HUD). */
 export const truck = {
@@ -82,37 +83,45 @@ export function stepTruck(dt: number, boxes: Box[]) {
 
 export function buildTruck() {
   const g = new THREE.Group();
-  const yellow = new THREE.MeshStandardMaterial({ color: 0xffc400, roughness: 0.5, metalness: 0.1, emissive: 0x7a5a00, emissiveIntensity: 1 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x1a2030, roughness: 0.8 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.4, 1.3), yellow);
-  body.position.set(0, 0.45, -0.25);
-  const cab = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.5, 0.6), yellow);
-  cab.position.set(0, 0.52, 0.55);
-  const glass = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.22, 0.05), new THREE.MeshStandardMaterial({ color: 0x0a1626, emissive: 0x2a5a8a, emissiveIntensity: 0.6 }));
-  glass.position.set(0, 0.62, 0.86);
-  const boom = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 1.2), new THREE.MeshStandardMaterial({ color: 0xff6a00, emissive: 0x401800 }));
-  boom.position.set(0, 0.8, -0.3);
-  boom.rotation.x = -0.25;
-  const wheelGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.16, 14);
-  wheelGeo.rotateZ(Math.PI / 2);
-  for (const [x, z] of [[-0.45, 0.55], [0.45, 0.55], [-0.45, -0.65], [0.45, -0.65]]) {
+  const yellow = new THREE.MeshLambertMaterial({ color: 0xffc400, emissive: new THREE.Color(0x4a3600) });
+  const white = new THREE.MeshLambertMaterial({ color: 0xf6f6f6 });
+  const dark = new THREE.MeshLambertMaterial({ color: 0x1a2030 });
+  const orange = new THREE.MeshLambertMaterial({ color: 0xff6a00, emissive: new THREE.Color(0x401800) });
+  const box = (w: number, h: number, d: number, m: THREE.Material, x: number, y: number, z: number) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    mesh.position.set(x, y, z);
+    g.add(mesh);
+    return mesh;
+  };
+  box(0.9, 0.3, 1.9, yellow, 0, 0.36, 0);
+  box(0.92, 0.08, 1.92, white, 0, 0.22, 0);
+  box(0.9, 0.34, 0.32, yellow, 0, 0.65, 0.78);
+  box(0.06, 0.34, 0.7, yellow, -0.43, 0.6, 0.4);
+  box(0.06, 0.34, 0.7, yellow, 0.43, 0.6, 0.4);
+  box(0.8, 0.28, 0.5, orange, 0, 0.64, -0.55);
+  box(0.12, 0.12, 1.3, orange, 0, 1.0, -0.4).rotation.x = -0.3;
+  box(0.34, 0.12, 0.34, white, 0, 1.4, -1.0);
+  const wheelGeo = new THREE.BoxGeometry(0.16, 0.34, 0.34);
+  for (const [x, z] of [[-0.5, 0.6], [0.5, 0.6], [-0.5, -0.65], [0.5, -0.65]]) {
     const w = new THREE.Mesh(wheelGeo, dark);
-    w.position.set(x, 0.22, z);
+    w.position.set(x, 0.18, z);
     g.add(w);
   }
   const beaconMat = new THREE.MeshBasicMaterial({ color: 0xffa500 });
-  const beacon = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), beaconMat);
-  beacon.position.set(0, 0.86, 0.5);
-  const head = new THREE.MeshBasicMaterial({ color: 0xfff6c8 });
-  for (const x of [-0.28, 0.28]) {
-    const h = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.1, 0.04), head);
-    h.position.set(x, 0.42, 0.87);
-    g.add(h);
-  }
-  const spot = new THREE.SpotLight(0xfff0c0, 55, 14, 0.55, 0.5, 1.4);
-  spot.position.set(0, 0.5, 0.9);
+  const beacon = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.2), beaconMat);
+  beacon.position.set(0, 0.9, 0.78);
+  g.add(beacon);
+  const headMat = new THREE.MeshBasicMaterial({ color: 0xfff6c8 });
+  for (const x of [-0.3, 0.3]) box(0.2, 0.13, 0.05, headMat, x, 0.42, 0.96);
+  const driver = buildCrewmate(0, 0.85);
+  driver.group.position.set(0, 0.5, 0.35);
+  g.add(driver.group);
+  const spot = new THREE.SpotLight(0xfff0c0, 0, 14, 0.55, 0.5, 1.4);
+  spot.position.set(0, 0.5, 0.95);
   spot.target.position.set(0, 0, 5);
   g.add(spot, spot.target);
-  g.add(body, cab, glass, boom, beacon);
-  return { group: g, beaconMat };
+  g.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) o.castShadow = true;
+  });
+  return { group: g, beaconMat, headMats: [headMat] as THREE.MeshBasicMaterial[], spot };
 }
