@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { startMusicDirector } from './audio/director';
 import { registerServiceWorker } from './pwa';
 
 createRoot(document.getElementById('root')!).render(
@@ -11,3 +12,4 @@ createRoot(document.getElementById('root')!).render(
 );
 
 registerServiceWorker();
+startMusicDirector();

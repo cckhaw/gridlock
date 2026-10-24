@@ -1,0 +1,10 @@
+Music used in Blackout Protocol. All tracks are CC0 1.0 (public domain dedication) from OpenGameArt.org.
+Credit is not required but is given with thanks.
+
+menu-heavenly-loop.mp3         "Heavenly Loop" by isaiah658            https://opengameart.org/content/heavenly-loop
+day-urban-theme.mp3            "Urban Theme" by MintoDog               https://opengameart.org/content/urban-theme
+night-space-city.mp3           "Space City" by MintoDog                https://opengameart.org/content/space-city
+investigate-suspicious-loop.mp3 "Suspicious Loop" by Hazmat Harry      https://opengameart.org/content/suspicious-loop
+tension-panic-mode.mp3         "Panic mode" by Breadman                https://opengameart.org/content/panic-mode
+
+Files were converted from Ogg Vorbis to MP3 (80 kbps) and loudness-normalised.

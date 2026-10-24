@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { music } from '../audio/music';
 import { sound, vibrate } from '../audio/synth';
 import { resetTruck } from '../city/truck';
 import { applyAction, createInitialState, deliverKit, pickupKit, setAssist, setPracticeHazards, tickGame, triggerHazard, voteIsolate } from '../engine/sim';
@@ -7,7 +8,7 @@ import type { ActionType, ActiveTab, Assist, Difficulty, DistrictId, GameMode, G
 const SETTINGS_KEY = 'blackout-protocol:settings';
 
 function loadSettings(): GameSettings {
-  const def: GameSettings = { crtScanlines: false, muted: false, haptics: true, timeOfDay: 'AUTO' };
+  const def: GameSettings = { crtScanlines: false, muted: false, haptics: true, timeOfDay: 'AUTO', music: true };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     return raw ? { ...def, ...JSON.parse(raw) } : def;
@@ -99,6 +100,7 @@ interface Store {
   flag: (engineerId: string) => void;
   togglePause: () => void;
   toggleMute: () => void;
+  toggleMusic: () => void;
   toggleCrt: () => void;
 }
 
@@ -109,6 +111,8 @@ const menuState = (settings: GameSettings): GameState => ({
 
 const initialSettings = loadSettings();
 sound.setMuted(initialSettings.muted);
+music.setMuted(initialSettings.muted);
+music.setEnabled(initialSettings.music);
 
 export const useGame = create<Store>((set, get) => ({
   g: menuState(initialSettings),
@@ -297,7 +301,15 @@ export const useGame = create<Store>((set, get) => ({
     const g = get().g;
     const settings = { ...g.settings, muted: !g.settings.muted };
     sound.setMuted(settings.muted);
-    if (!settings.muted && g.phase === 'RUNNING') sound.startDrone();
+    music.setMuted(settings.muted);
+    saveSettings(settings);
+    set({ g: { ...g, settings } });
+  },
+
+  toggleMusic: () => {
+    const g = get().g;
+    const settings = { ...g.settings, music: !g.settings.music };
+    music.setEnabled(settings.music);
     saveSettings(settings);
     set({ g: { ...g, settings } });
   },

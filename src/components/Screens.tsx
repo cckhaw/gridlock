@@ -19,6 +19,8 @@ export function MenuScreen() {
   const setDifficulty = useGame((s) => s.setDifficulty);
   const best = useGame((s) => s.best);
   const pwa = useInstall();
+  const musicOn = useGame((s) => s.g.settings.music);
+  const toggleMusic = useGame((s) => s.toggleMusic);
   const [mi, setMi] = useState(() => (Object.keys(useGame.getState().best).length === 0 ? 0 : 1));
   const m = MODES[mi];
   const coarse = window.matchMedia('(pointer: coarse)').matches;
@@ -63,10 +65,15 @@ export function MenuScreen() {
           </div>
         </section>
 
+        <div className="group-list">
+          <div className="group-row"><span className="text-[15px]">Music</span><button role="switch" aria-checked={musicOn} aria-label="Music" onClick={toggleMusic} className="ios-switch touch-target" /></div>
+        </div>
+
         <div className="mt-auto flex flex-col items-center gap-2 pt-2 text-[13px] text-white/55">
           {pwa.canPrompt && <button onClick={pwa.install} className="btn-tinted w-full touch-target">Install app</button>}
           {pwa.iosHint && <div className="text-center">To install: tap <b>Share</b>, then <b>Add to Home Screen</b>.</div>}
           {pwa.offlineReady && <div className="text-[#30d158]">Ready to play offline</div>}
+          <div className="text-center text-[12px] text-white/40">Music by MintoDog, isaiah658, Hazmat Harry and Breadman (CC0, OpenGameArt.org)</div>
         </div>
       </div>
     </main>

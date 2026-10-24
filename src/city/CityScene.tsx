@@ -6,8 +6,9 @@ import GridMap from '../components/GridMap';
 import { DISTRICT_ORDER, GRID_EDGES } from '../engine/constants';
 import { mulberry32 } from '../engine/rng';
 import { crewTargets, currentObjective, needsHelp, progress } from '../engine/sim';
+import { autoNight, smooth } from './timeOfDay';
 import { useGame } from '../store/useGame';
-import type { DistrictId, GameState, HazardType, NodeStatus } from '../types/game';
+import type { DistrictId, HazardType, NodeStatus } from '../types/game';
 import { CityAlerts, DistrictLabels } from './CityOverlay';
 import { buildDistrict, PAD, type DistrictView } from './buildDistricts';
 import { animateCrewmate, buildGround, buildLamps, buildSky, buildSmoke, buildTraffic, buildTrees, lam, ROADS, type CrewMood } from './props';
@@ -30,17 +31,6 @@ const FX: Record<HazardType, { color: number; i: number }> = {
   DEMAND_SURGE: { color: 0x33e0ff, i: 12 },
   HEATWAVE: { color: 0xff8a2a, i: 10 },
 };
-
-const smooth = (a: number, b: number, x: number) => {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
-
-/** Target night factor 0..1 for the AUTO day/night cycle. */
-function autoNight(g: GameState): number {
-  if (g.mode === 'PRACTICE') return smooth(0.35, 0.65, 0.5 - 0.5 * Math.cos((g.tick / 240) * Math.PI * 2));
-  return smooth(0.3, 0.72, progress(g));
-}
 
 const worldPos = (px: number, py: number) => new THREE.Vector3((px - 0.5) * WORLD.w, 0, (py - 0.5) * WORLD.d);
 

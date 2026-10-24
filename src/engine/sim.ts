@@ -113,7 +113,7 @@ const nodeName = (s: GameState, id: DistrictId) => s.nodes[id].name.toUpperCase(
 export function createInitialState(
   mode: GameMode,
   seed = Math.floor(Math.random() * 2 ** 31),
-  settings: GameState['settings'] = { crtScanlines: true, muted: false, haptics: true, timeOfDay: 'AUTO' },
+  settings: GameState['settings'] = { crtScanlines: true, muted: false, haptics: true, timeOfDay: 'AUTO', music: true },
   difficulty: Difficulty = 'OPERATOR',
 ): GameState {
   const rng = mulberry32(seed);

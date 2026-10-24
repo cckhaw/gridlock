@@ -191,6 +191,7 @@ export interface PracticeState {
 
 export interface GameSettings {
   timeOfDay: TimeOfDay;
+  music: boolean;
   crtScanlines: boolean;
   muted: boolean;
   haptics: boolean;
