@@ -6,6 +6,7 @@ import CityScene from './city/CityScene';
 import DistrictStrip from './components/DistrictStrip';
 import LogTerminal from './components/LogTerminal';
 import { EndScreen, MenuScreen } from './components/Screens';
+import ObjectiveStrip from './components/ObjectiveStrip';
 import TopBar from './components/TopBar';
 import Tutorial from './components/Tutorial';
 import { useGameLoop } from './hooks/useGameLoop';
@@ -25,7 +26,7 @@ function DesktopFeed() {
     </button>
   );
   return (
-    <div className="absolute inset-x-3 bottom-3 flex flex-col gap-2">
+    <div className="absolute bottom-3 left-[216px] right-[216px] flex flex-col gap-2">
       <div className="flex gap-2">
         {chip('NEWS', 'City news')}
         {chip('SUSPECTS', mode === 'SABOTEUR_DEDUCTION' ? 'Suspects' : 'Storm')}
@@ -69,7 +70,7 @@ export default function App() {
         <TopBar />
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(340px,400px)] gap-3 p-3">
           <section className="relative min-h-0 overflow-hidden rounded-2xl">
-            <div className="absolute inset-0"><CityScene /></div>
+            <div className="absolute inset-0"><CityScene topOffset={66} /></div>
             <div className="absolute inset-x-3 top-3"><DistrictStrip chipsOnly /></div>
             <DesktopFeed />
           </section>
@@ -89,6 +90,7 @@ export default function App() {
           <BottomDock side />
           <main className="min-h-0 flex-1 overflow-y-auto p-2">
             {tab === 'GRID' && <GridView mobile />}
+            {tab !== 'GRID' && tab !== 'LOGS' && <ObjectiveStrip />}
             {tab === 'FOCUS' && <FocusPanel />}
             {tab === 'LOGS' && <div className="h-full min-h-40"><LogTerminal /></div>}
             {tab === 'DEDUCT' && <DeductPanel />}
@@ -103,6 +105,7 @@ export default function App() {
         <TopBar />
         <main className="min-h-0 flex-1 overflow-y-auto p-3" style={{ paddingBottom: 'calc(8.75rem + env(safe-area-inset-bottom))' }}>
           {tab === 'GRID' && <GridView mobile />}
+          {tab !== 'GRID' && tab !== 'LOGS' && <ObjectiveStrip />}
           {tab === 'FOCUS' && <FocusPanel />}
           {tab === 'LOGS' && <div className="h-[calc(100dvh-14rem)]"><LogTerminal /></div>}
           {tab === 'DEDUCT' && <DeductPanel />}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, createInitialState, tickGame, voteIsolate } from './sim';
+import { applyAction, createInitialState, currentObjective, deliverKit, pickupKit, tickGame, voteIsolate } from './sim';
 import type { GameState } from '../types/game';
 
 const run = (s: GameState, n: number) => {
@@ -111,5 +111,48 @@ describe('replay data & saboteur behaviour', () => {
     }
     expect(total).toBeGreaterThan(0);
     expect(framed).toBeGreaterThan(0);
+  });
+});
+
+describe('repair crew', () => {
+  it('needs a kit first, then repairs a troubled district and pays out', () => {
+    let s = calm(createInitialState('SOLO_CRISIS', 7));
+    s.nodes.water.temperature = 90;
+    s.nodes.water.integrity = 50;
+    expect(currentObjective(s).kind).toBe('PICKUP');
+    expect(deliverKit(s, 'water')).toBe(s); // no kit yet
+    s = pickupKit(s);
+    expect(s.crew.hasKit).toBe(true);
+    expect(currentObjective(s)).toMatchObject({ kind: 'DELIVER', targetNodeId: 'water' });
+    s = deliverKit(s, 'water');
+    expect(s.nodes.water.integrity).toBe(75);
+    expect(s.nodes.water.temperature).toBeLessThanOrEqual(70);
+    expect(s.crew.credits).toBeGreaterThanOrEqual(100);
+    expect(s.crew.hasKit).toBe(false);
+    expect(pickupKit(s)).toBe(s); // depot cooling down
+    s = run(s, 8);
+    expect(pickupKit(s)).not.toBe(s);
+  });
+
+  it('refuses healthy districts and revives a blackout', () => {
+    let s = calm(createInitialState('SOLO_CRISIS', 7));
+    s = pickupKit(s);
+    expect(deliverKit(s, 'hospital')).toBe(s);
+    s.nodes.hospital.integrity = 1;
+    s.nodes.hospital.temperature = 120;
+    s = run(s, 2);
+    expect(s.nodes.hospital.status).toBe('BLACKOUT');
+    s = deliverKit(s, 'hospital');
+    expect(s.nodes.hospital.status).not.toBe('BLACKOUT');
+    expect(s.nodes.hospital.integrity).toBe(60);
+    expect(s.crew.revives).toBe(1);
+  });
+
+  it('in deduction mode the crew only serves your own district', () => {
+    let s = pickupKit(createInitialState('SABOTEUR_DEDUCTION', 11));
+    const other = s.engineers[0].nodeId;
+    s.nodes[other].temperature = 99;
+    expect(deliverKit(s, other)).toBe(s);
+    expect(currentObjective(s).kind).toBe('INVESTIGATE');
   });
 });

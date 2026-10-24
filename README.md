@@ -20,6 +20,8 @@ npm run preview
 - Post-game replay: health line, district temperature heatmap, scrubber and event timeline (saboteur actions revealed).
 - PWA: manifest, icons, service worker with an offline app shell, self-hosted fonts.
 - **3D night-city view** (three.js): each district is a themed neighbourhood (skyscrapers, factory stacks, hospital cross, metro train, houses, water tanks, radar, domes). Windows go amber/red/dark with status, power lines carry moving energy, storms bring rain and lightning, and alert pop-ups float over the affected district. Falls back to a flat map without WebGL.
+- **Drive the repair truck** (WASD / arrows, or the on-screen joystick on touch): load a repair kit at the yellow depot ring, deliver it to the green beam on the district in trouble. Chase and overview cameras, minimap, speed, credits, and a live objective banner.
+- **Specific how-to-play briefing** per mode (mission, win/lose numbers, controls, repair loop, power balance, heat, alerts, scoring), reopenable with ? / the help button.
 - Portrait phone layout with bottom dock and thumb-zone actions; landscape desktop dashboard.
 
 ## Layout

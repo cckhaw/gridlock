@@ -82,6 +82,15 @@ export const sound = {
   },
   success: () => [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.18, 'triangle', 0.06, undefined, i * 0.12)),
   fail: () => [392, 330, 262, 196].forEach((f, i) => tone(f, 0.25, 'sawtooth', 0.06, undefined, i * 0.16)),
+  horn: () => {
+    tone(330, 0.22, 'square', 0.07);
+    tone(415, 0.22, 'square', 0.06);
+  },
+  pickup: () => {
+    tone(660, 0.1, 'triangle', 0.07);
+    tone(990, 0.16, 'triangle', 0.07, undefined, 0.1);
+  },
+  deliver: () => [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.14, 'triangle', 0.06, undefined, i * 0.07)),
   startDrone() {
     const a = ac();
     if (!a || drone) return;

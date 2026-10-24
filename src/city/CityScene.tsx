@@ -8,6 +8,10 @@ import { useGame } from '../store/useGame';
 import type { DistrictId, HazardType, NodeStatus } from '../types/game';
 import { alertFromLog, type CityAlert } from './alertText';
 import { buildDistrict, PAD, windowTexture, type DistrictView } from './buildDistricts';
+import { buildTruck, DEPOT, stepTruck, truck } from './truck';
+import { sound } from '../audio/synth';
+import { crewTargets, needsHelp, currentObjective } from '../engine/sim';
+import CityHud from './CityHud';
 
 const WORLD = { w: 24, d: 17 };
 const OK = new THREE.Color(0x00f5d4);
@@ -46,7 +50,7 @@ function makeBolt(x: number, z: number): THREE.Group {
   return g;
 }
 
-export default function CityScene() {
+export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
   const host = useRef<HTMLDivElement>(null);
   const overlay = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
@@ -140,10 +144,10 @@ export default function CityScene() {
       const mid = pa.clone().add(pb).multiplyScalar(0.5).setY(3.4);
       const curve = new THREE.QuadraticBezierCurve3(pa, mid, pb);
       const mat = new THREE.MeshBasicMaterial({ color: 0x00f5d4 });
-      scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 28, 0.05, 5), mat));
+      scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 28, 0.035, 5), mat));
       const packetMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       const packets = [0, 1, 2].map(() => {
-        const m = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), packetMat);
+        const m = new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 8), packetMat);
         scene.add(m);
         return m;
       });
@@ -184,6 +188,64 @@ export default function CityScene() {
     // Lightning bolts
     const bolts = new Map<string, { obj: THREE.Group; born: number }>();
     let flash = 0;
+
+    // Depot, beams and the repair truck
+    const depot = new THREE.Group();
+    depot.position.set(DEPOT.x, 0, DEPOT.z);
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.1, 2.4), new THREE.MeshStandardMaterial({ color: 0x1d2538, roughness: 0.9 }));
+    slab.position.y = 0.05;
+    depot.add(slab);
+    const depotRing = new THREE.Mesh(new THREE.RingGeometry(1.45, 1.75, 48), new THREE.MeshBasicMaterial({ color: 0xffd400, side: THREE.DoubleSide, transparent: true }));
+    depotRing.rotation.x = -Math.PI / 2;
+    depotRing.position.y = 0.14;
+    depot.add(depotRing);
+    const depotBeam = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 7, 24, 1, true), new THREE.MeshBasicMaterial({ color: 0xffd400, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }));
+    depotBeam.position.y = 3.5;
+    depot.add(depotBeam);
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.5), new THREE.MeshStandardMaterial({ color: 0xff6a00, emissive: 0x401800 }));
+    crate.position.set(-1.9, 0.3, 0);
+    depot.add(crate);
+    scene.add(depot);
+    const destRing = new THREE.Mesh(new THREE.RingGeometry(2.55, 2.85, 56), new THREE.MeshBasicMaterial({ color: 0x00ff88, side: THREE.DoubleSide, transparent: true }));
+    destRing.rotation.x = -Math.PI / 2;
+    destRing.position.y = 0.34;
+    scene.add(destRing);
+    const destBeam = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 12, 28, 1, true), new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
+    scene.add(destBeam);
+    const { group: truckGroup, beaconMat } = buildTruck();
+    truckGroup.scale.setScalar(1.3);
+    scene.add(truckGroup);
+    const blockers = DISTRICT_ORDER.flatMap((id) => {
+      const q = views[id].group.position;
+      return views[id].blockers.map((b) => ({ x: q.x + b.x, z: q.z + b.z, hw: b.hw, hd: b.hd }));
+    });
+    blockers.push({ x: DEPOT.x - 1.9, z: DEPOT.z, hw: 0.25, hd: 0.25 });
+    let lastView = useGame.getState().cityView;
+    let lastInside: DistrictId | null = null;
+    let lastAct = 0;
+
+    const onKey = (e: KeyboardEvent, isDown: boolean) => {
+      const st = useGame.getState();
+      if (e.target instanceof HTMLInputElement && e.code.startsWith('Arrow')) return;
+      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
+        if (st.g.phase !== 'RUNNING' || st.tutorialOpen) return;
+        if (isDown) truck.keys.add(e.code);
+        else truck.keys.delete(e.code);
+        e.preventDefault();
+        return;
+      }
+      if (!isDown) return;
+      if (e.code === 'KeyE' && st.g.phase === 'RUNNING') sound.horn();
+      if (e.code === 'KeyV') st.toggleView();
+      if (e.code === 'F1' || (e.key === '?' && !e.ctrlKey)) {
+        e.preventDefault();
+        st.openTutorial();
+      }
+    };
+    const kd = (e: KeyboardEvent) => onKey(e, true);
+    const ku = (e: KeyboardEvent) => onKey(e, false);
+    window.addEventListener('keydown', kd);
+    window.addEventListener('keyup', ku);
 
     // Camera / controls
     const target = new THREE.Vector3(0, 0.5, 0);
@@ -403,7 +465,66 @@ export default function CityScene() {
         });
       }
 
-      controls.update();
+      // Truck, zones, beams and camera
+      const gs = useGame.getState();
+      const running = gs.g.phase === 'RUNNING' && !gs.tutorialOpen;
+      if (running) stepTruck(dt, blockers);
+      truckGroup.position.set(truck.x, 0, truck.z);
+      truckGroup.rotation.y = truck.heading;
+      beaconMat.color.setHex(Math.sin(t * 9) > 0 ? 0xffa500 : 0x553300);
+      const obj = currentObjective(g);
+      depot.visible = true;
+      const needKit = !g.crew.hasKit;
+      depotRing.material.opacity = needKit ? 0.6 + 0.4 * Math.sin(t * 5) : 0.15;
+      (depotBeam.material as THREE.MeshBasicMaterial).opacity = needKit ? 0.16 + 0.06 * Math.sin(t * 5) : 0.03;
+      depotRing.scale.setScalar(needKit ? 1 + 0.05 * Math.sin(t * 5) : 1);
+      const tgt = obj.kind === 'DELIVER' && obj.targetNodeId ? views[obj.targetNodeId].group.position : null;
+      destRing.visible = destBeam.visible = !!tgt;
+      if (tgt) {
+        destRing.position.x = destBeam.position.x = tgt.x;
+        destRing.position.z = destBeam.position.z = tgt.z;
+        destBeam.position.y = 6;
+        (destRing.material as THREE.MeshBasicMaterial).opacity = 0.6 + 0.4 * Math.sin(t * 6);
+        destRing.scale.setScalar(1 + 0.05 * Math.sin(t * 6));
+      }
+      if (running && t - lastAct > 0.5) {
+        const dd = Math.hypot(truck.x - DEPOT.x, truck.z - DEPOT.z);
+        if (dd < DEPOT.r && !g.crew.hasKit && g.crew.kitCooldown <= 0) {
+          gs.takeKit();
+          lastAct = t;
+        }
+        let inside: DistrictId | null = null;
+        for (const id of DISTRICT_ORDER) {
+          const q = views[id].group.position;
+          if (Math.abs(truck.x - q.x) < PAD.w / 2 + 0.4 && Math.abs(truck.z - q.z) < PAD.d / 2 + 0.4) inside = id;
+        }
+        if (inside !== lastInside) {
+          lastInside = inside;
+          if (inside) gs.selectNode(inside);
+        }
+        if (inside && g.crew.hasKit && crewTargets(g).some((n) => n.id === inside) && needsHelp(g, g.nodes[inside])) {
+          gs.dropKit(inside);
+          lastAct = t;
+        }
+      }
+      const chase = gs.cityView === 'CHASE';
+      if (chase !== (lastView === 'CHASE')) {
+        lastView = gs.cityView;
+        interacted = false;
+        if (!chase) fit();
+      }
+      lastView = gs.cityView;
+      controls.enabled = !chase;
+      if (chase) {
+        const fx = Math.sin(truck.heading);
+        const fz = Math.cos(truck.heading);
+        const back = 8.6 + Math.abs(truck.speed) * 0.3;
+        const want = tmp.set(truck.x - fx * back, 6.6 + Math.abs(truck.speed) * 0.15, truck.z - fz * back);
+        camera.position.lerp(want, 1 - Math.pow(0.001, dt));
+        camera.lookAt(truck.x + fx * 3.2, 0.4, truck.z + fz * 3.2);
+      } else {
+        controls.update();
+      }
       renderer.render(scene, camera);
 
       // HTML overlay (labels and alerts) follows the 3D anchors
@@ -425,6 +546,9 @@ export default function CityScene() {
       ro.disconnect();
       renderer.domElement.removeEventListener('pointerdown', onDown);
       renderer.domElement.removeEventListener('pointerup', onUp);
+      window.removeEventListener('keydown', kd);
+      window.removeEventListener('keyup', ku);
+      truck.keys.clear();
       controls.dispose();
       scene.traverse((o) => {
         const m = o as THREE.Mesh;
@@ -440,6 +564,7 @@ export default function CityScene() {
   return (
     <div className="relative h-full w-full overflow-hidden rounded-2xl border border-scada-border/70 bg-scada-bg" aria-label="City power map">
       <div ref={host} className="absolute inset-0" />
+      <CityHud topOffset={topOffset} />
       <div ref={overlay} className="pointer-events-none absolute inset-0 overflow-hidden">
         <DistrictLabels />
         <CityAlerts />
