@@ -5,18 +5,18 @@ import { useGame } from '../store/useGame';
 import type { TimelineKind } from '../types/game';
 
 const KIND_COLOR: Record<TimelineKind, string> = {
-  HAZARD: '#FFB703',
-  BLACKOUT: '#FF0054',
+  HAZARD: '#FF9F0A',
+  BLACKOUT: '#FF453A',
   TACTIC: '#C77DFF',
-  SCAN: '#3A86FF',
-  VOTE: '#00F5D4',
-  COOLANT: '#3A86FF',
+  SCAN: '#0A84FF',
+  VOTE: '#30D158',
+  COOLANT: '#0A84FF',
 };
 
 const heat = (t: number, down: boolean) => {
   if (down) return '#1E293B';
-  if (t >= 95) return '#FF0054';
-  if (t >= 80) return '#FFB703';
+  if (t >= 95) return '#FF453A';
+  if (t >= 80) return '#FF9F0A';
   const k = Math.max(0, Math.min(1, (t - 55) / 25));
   return `rgb(${Math.round(0 + k * 120)},${Math.round(160 - k * 20)},${Math.round(150 - k * 90)})`;
 };
@@ -67,7 +67,7 @@ export default function Replay({ onClose }: { onClose: () => void }) {
           </div>
           <div className="relative">
             <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-24 w-full rounded bg-black/40">
-              <polyline points={path} fill="none" stroke="#00F5D4" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
+              <polyline points={path} fill="none" stroke="#30D158" strokeWidth={1.2} vectorEffect="non-scaling-stroke" />
             </svg>
             {events.map((e, i) => (
               <span

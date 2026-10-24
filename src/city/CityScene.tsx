@@ -9,17 +9,16 @@ import { crewTargets, currentObjective, needsHelp, progress } from '../engine/si
 import { useGame } from '../store/useGame';
 import type { DistrictId, GameState, HazardType, NodeStatus } from '../types/game';
 import { CityAlerts, DistrictLabels } from './CityOverlay';
-import CityHud from './CityHud';
 import { buildDistrict, PAD, type DistrictView } from './buildDistricts';
 import { animateCrewmate, buildGround, buildLamps, buildSky, buildSmoke, buildTraffic, buildTrees, lam, ROADS, type CrewMood } from './props';
 import { makeWallTextures } from './textures';
 import { buildTruck, DEPOT, stepTruck, truck } from './truck';
 
 const WORLD = { w: 24, d: 17 };
-const OK = new THREE.Color(0x00e5c0);
-const AMBER = new THREE.Color(0xffb703);
-const RED = new THREE.Color(0xff2a55);
-const BLUE = new THREE.Color(0x3a86ff);
+const OK = new THREE.Color(0x30d158);
+const AMBER = new THREE.Color(0xff9f0a);
+const RED = new THREE.Color(0xff453a);
+const BLUE = new THREE.Color(0x0a84ff);
 const DEAD = new THREE.Color(0x20262f);
 const DEAD_LINE = new THREE.Color(0x4a5568);
 const RANK: Record<NodeStatus, number> = { NOMINAL: 0, ISOLATED: 1, CAUTION: 2, CRITICAL: 3, BLACKOUT: 4 };
@@ -63,7 +62,7 @@ function makeBolt(x: number, z: number): THREE.Group {
   return g;
 }
 
-export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
+export default function CityScene({ bleed = false }: { bleed?: boolean }) {
   const host = useRef<HTMLDivElement>(null);
   const overlay = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
@@ -185,7 +184,7 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
       const pb = views[b].group.position.clone().setY(1.3);
       const mid = pa.clone().add(pb).multiplyScalar(0.5).setY(3.9);
       const curve = new THREE.QuadraticBezierCurve3(pa, mid, pb);
-      const mat = new THREE.MeshBasicMaterial({ color: 0x00e5c0 });
+      const mat = new THREE.MeshBasicMaterial({ color: 0x30d158 });
       scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 28, 0.032, 5), mat));
       const packetMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
       const packets = [0, 1, 2].map(() => {
@@ -633,7 +632,7 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
         if (!chase) fit();
       }
       lastView = gs.cityView;
-      const wantFov = chase ? 44 : 36;
+      const wantFov = chase ? (camera.aspect < 0.8 ? 50 : 44) : 36;
       if (Math.abs(camera.fov - wantFov) > 0.05) {
         camera.fov += (wantFov - camera.fov) * Math.min(1, dt * 5);
         camera.updateProjectionMatrix();
@@ -642,8 +641,9 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
       if (chase) {
         const fx = Math.sin(truck.heading);
         const fz = Math.cos(truck.heading);
-        const back = 10.8 + Math.abs(truck.speed) * 0.35;
-        const want = tmp.set(truck.x - fx * back, 8.2 + Math.abs(truck.speed) * 0.2, truck.z - fz * back);
+        const tall = camera.aspect < 0.8;
+        const back = (tall ? 13.5 : 10.8) + Math.abs(truck.speed) * 0.35;
+        const want = tmp.set(truck.x - fx * back, (tall ? 10.5 : 8.2) + Math.abs(truck.speed) * 0.2, truck.z - fz * back);
         camera.position.lerp(want, 1 - Math.pow(0.001, dt));
         camera.lookAt(truck.x + fx * 4, 0.3, truck.z + fz * 4);
       } else {
@@ -686,9 +686,8 @@ export default function CityScene({ topOffset = 8 }: { topOffset?: number }) {
 
   if (failed) return <GridMap />;
   return (
-    <div className="relative h-full w-full overflow-hidden rounded-2xl border border-white/15 bg-scada-bg" aria-label="City power map">
+    <div className={`relative h-full w-full overflow-hidden bg-scada-bg ${bleed ? '' : 'rounded-2xl'}`} aria-label="City power map">
       <div ref={host} className="absolute inset-0" />
-      <CityHud topOffset={topOffset} />
       <div ref={overlay} className="pointer-events-none absolute inset-0 overflow-hidden">
         <DistrictLabels />
         <CityAlerts />

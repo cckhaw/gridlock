@@ -4,7 +4,14 @@ import { canControl } from '../engine/sim';
 import { useGame } from '../store/useGame';
 import { Gauge, ICONS, STATUS_STYLE, integrityColor, tempColor } from './ui';
 
-export default function FocusPanel() {
+const MOOD: Record<string, string> = { NOMINAL: 'All good', CAUTION: 'Running hot', CRITICAL: 'In trouble', BLACKOUT: 'Lights are out', ISOLATED: 'Cut off from the grid' };
+
+function Switch({ on, onChange, label }: { on: boolean; onChange: () => void; label: string }) {
+  return <button role="switch" aria-checked={on} aria-label={label} onClick={onChange} className="ios-switch touch-target" />;
+}
+
+/** Selected-district inspector, laid out as inset grouped lists. */
+export default function FocusPanel({ children }: { children?: React.ReactNode }) {
   const g = useGame((s) => s.g);
   const selectNode = useGame((s) => s.selectNode);
   const setSupply = useGame((s) => s.setSupply);
@@ -17,80 +24,78 @@ export default function FocusPanel() {
   const idx = DISTRICT_ORDER.indexOf(node.id);
   const step = (d: number) => selectNode(DISTRICT_ORDER[(idx + d + DISTRICT_ORDER.length) % DISTRICT_ORDER.length]);
   const hazards = g.hazards.filter((h) => h.targetNodeId === node.id);
-  const owner = node.ownerId === 'PLAYER' ? 'YOU' : node.ownerId;
-  const nudge = 'touch-target flex h-12 w-12 shrink-0 items-center justify-center rounded border border-scada-cobalt text-scada-cobalt disabled:opacity-35';
   const delta = Math.round(node.delta);
+  const round = 'touch-target flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/12 text-white disabled:opacity-35';
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <button className={nudge} onClick={() => step(-1)} aria-label="Previous node"><ChevronLeft size={22} /></button>
-        <div className={`scada-panel flex min-w-0 flex-1 items-center gap-2 border px-3 py-2 ${st.border}`}>
-          <Icon size={26} className={st.text} />
+    <div className="flex flex-col gap-3 pb-1">
+      <div className="flex items-center gap-3">
+        <button className={round} onClick={() => step(-1)} aria-label="Previous district"><ChevronLeft size={20} /></button>
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px]" style={{ background: `${st.hex}33` }}>
+            <Icon size={24} style={{ color: st.hex }} />
+          </span>
           <div className="min-w-0">
-            <div className="text-sm font-bold leading-tight">{node.name}</div>
-            <div className={`text-[11px] font-bold ${st.text}`}>{st.label} <span className="text-scada-dim">· {owner}</span></div>
+            <div className="text-[20px] font-bold leading-tight tracking-tight">{node.name}</div>
+            <div className="text-[13px] font-medium" style={{ color: st.hex }}>● {MOOD[node.status]} <span className="text-white/50">· {node.ownerId === 'PLAYER' ? 'You' : node.ownerId}</span></div>
           </div>
         </div>
-        <button className={nudge} onClick={() => step(1)} aria-label="Next node"><ChevronRight size={22} /></button>
+        <button className={round} onClick={() => step(1)} aria-label="Next district"><ChevronRight size={20} /></button>
       </div>
 
-      <div className="scada-panel grid grid-cols-3 gap-2 p-3 text-center">
-        <div><div className="text-[10px] text-scada-dim">Needs</div><div className="text-lg font-bold text-scada-amber">{Math.round(node.demand)}</div></div>
-        <div><div className="text-[10px] text-scada-dim">Gets</div><div className="text-lg font-bold text-scada-cobalt">{Math.round(node.supply)}</div></div>
-        <div>
-          <div className="text-[10px] text-scada-dim">Gap</div>
-          <div className={`text-lg font-bold ${delta > 0 ? 'text-scada-crimson' : 'text-scada-mint'}`}>{delta > 0 ? '+' : ''}{delta}</div>
+      {children}
+
+      <div>
+        <div className="caption-label mb-1.5 px-1">Power</div>
+        <div className="group-list">
+          <div className="group-row"><span className="text-[15px]">Needs</span><span className="text-[17px] font-semibold tabular-nums text-[#ff9f0a]">{Math.round(node.demand)} MW</span></div>
+          <div className="group-row"><span className="text-[15px]">Gets</span><span className="text-[17px] font-semibold tabular-nums text-[#0a84ff]">{Math.round(node.supply)} MW</span></div>
+          <div className="group-row"><span className="text-[15px]">Gap</span><span className={`text-[17px] font-semibold tabular-nums ${delta > 0 ? 'text-[#ff453a]' : 'text-[#30d158]'}`}>{delta > 0 ? '+' : ''}{delta} MW</span></div>
         </div>
-        <div className="col-span-3 text-[10px] text-scada-dim">MW · max {node.capacity} · {Math.round((node.supply / node.capacity) * 100)}% loaded
-          {node.redistributedLoad > 0 && <span className="text-scada-amber"> · +{Math.round(node.redistributedLoad)} MW rerouted in</span>}
+        {node.redistributedLoad > 0 && <div className="mt-1.5 px-1 text-[13px] text-[#ff9f0a]">+{Math.round(node.redistributedLoad)} MW rerouted in from a neighbour</div>}
+      </div>
+
+      <div>
+        <div className="caption-label mb-1.5 px-1">Health</div>
+        <div className="group-list">
+          <div className="group-row flex-col !items-stretch !gap-1.5">
+            <Gauge label="Temperature" value={node.temperature} max={120} markers={[80, 95]} color={tempColor(node.temperature)} display={`${node.temperature.toFixed(1)}°C`} />
+          </div>
+          <div className="group-row flex-col !items-stretch !gap-1.5">
+            <Gauge label="Condition" value={node.integrity} max={100} color={integrityColor(node.integrity)} display={`${Math.round(node.integrity)}%`} />
+          </div>
+          {node.coolantActive && <div className="group-row text-[15px] text-[#4cd964]"><span>Cooling down</span><span className="tabular-nums">{node.coolantRemaining}s</span></div>}
+          {hazards.map((h) => (
+            <div key={h.id} className="group-row text-[15px] text-[#ffb340]"><span>⚠ {h.type.replace('_', ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())}</span><span className="tabular-nums">{h.remainingSec}s</span></div>
+          ))}
         </div>
       </div>
 
-      <div className="scada-panel flex flex-col gap-3 p-3">
-        <Gauge label="Temperature" value={node.temperature} max={120} markers={[80, 95]} color={tempColor(node.temperature)} display={`${node.temperature.toFixed(1)}°C`} />
-        <Gauge label="Condition" value={node.integrity} max={100} color={integrityColor(node.integrity)} display={`${Math.round(node.integrity)}%`} />
-        {node.coolantActive && <div className="text-[11px] text-scada-cobalt">❄ COOLANT FLUSH · {node.coolantRemaining}s</div>}
-        {hazards.map((h) => (
-          <div key={h.id} className="text-[11px] font-bold text-scada-amber">⚠ {h.type.replace('_', ' ')} · {h.remainingSec}s</div>
-        ))}
+      <div>
+        <div className="mb-1.5 flex items-baseline justify-between px-1">
+          <span className="caption-label">Power sent here</span>
+          <span className="text-[13px] text-white/60">Spare <b className="tabular-nums text-[#0a84ff]">{g.reserveMW} MW</b></span>
+        </div>
+        <div className="group-list px-2 py-1">
+          <div className="flex items-center gap-1">
+            <button className={round} disabled={!own || !online} onClick={() => setSupply(node.supply - 10)} aria-label="Decrease 10 MW"><Minus size={18} /></button>
+            <input type="range" className="mw-slider" min={0} max={node.capacity} step={5} value={Math.round(node.supply)} disabled={!own || !online} onChange={(e) => setSupply(Number(e.target.value))} aria-label="Megawatt allocation" />
+            <button className={round} disabled={!own || !online} onClick={() => setSupply(node.supply + 10)} aria-label="Increase 10 MW"><Plus size={18} /></button>
+          </div>
+        </div>
+        {!own && <div className="mt-1.5 px-1 text-[13px] text-white/60">{node.ownerId} runs this district. Use Inspect and the News feed to check on them.</div>}
       </div>
 
       {g.assistAllowed && (
-        <div className="scada-panel flex flex-col gap-2 p-3">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-scada-dim">Autopilot (beginner help)</div>
-          {([['autoBalance', 'Balance power automatically'], ['autoCool', 'Cool hot districts automatically']] as const).map(([k, label]) => (
-            <button
-              key={k}
-              onClick={() => patchAssist({ [k]: !g.assist[k] })}
-              className="touch-target flex min-h-12 items-center justify-between gap-3 rounded-xl border border-white/15 bg-black/30 px-3 text-left text-xs"
-              aria-pressed={g.assist[k]}
-            >
-              <span>{label}</span>
-              <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${g.assist[k] ? 'bg-scada-mint text-scada-bg' : 'bg-scada-border text-scada-dim'}`}>{g.assist[k] ? 'ON' : 'OFF'}</span>
-            </button>
-          ))}
-          <div className="text-[11px] leading-4 text-scada-dim">Turn these OFF when you want to practise the sliders and Cool down yourself.</div>
+        <div>
+          <div className="caption-label mb-1.5 px-1">Autopilot</div>
+          <div className="group-list">
+            <div className="group-row"><span className="text-[15px]">Balance power</span><Switch on={g.assist.autoBalance} label="Balance power automatically" onChange={() => patchAssist({ autoBalance: !g.assist.autoBalance })} /></div>
+            <div className="group-row"><span className="text-[15px]">Cool hot districts</span><Switch on={g.assist.autoCool} label="Cool hot districts automatically" onChange={() => patchAssist({ autoCool: !g.assist.autoCool })} /></div>
+          </div>
+          <div className="mt-1.5 px-1 text-[13px] leading-snug text-white/60">Turn these off to practise the slider and Cool down yourself.</div>
         </div>
       )}
-
-      <div className="scada-panel p-3">
-        <div className="mb-1 flex justify-between text-[11px] text-scada-dim">
-          <span>Power sent to this district</span>
-          <span>Spare <span className="text-scada-cobalt">{g.reserveMW} MW</span></span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button className={nudge} disabled={!own || !online} onClick={() => setSupply(node.supply - 10)} aria-label="Decrease 10 MW"><Minus size={20} /></button>
-          <input
-            type="range" className="mw-slider" min={0} max={node.capacity} step={5}
-            value={Math.round(node.supply)} disabled={!own || !online}
-            onChange={(e) => setSupply(Number(e.target.value))}
-            aria-label="Megawatt allocation"
-          />
-          <button className={nudge} disabled={!own || !online} onClick={() => setSupply(node.supply + 10)} aria-label="Increase 10 MW"><Plus size={20} /></button>
-        </div>
-        {!own && <div className="mt-1 text-[11px] text-scada-dim">Controlled by {node.ownerId}. Use DIAGNOSE and the telemetry log to audit.</div>}
-      </div>
     </div>
   );
 }

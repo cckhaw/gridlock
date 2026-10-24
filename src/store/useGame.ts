@@ -69,6 +69,10 @@ function markTutorialSeen(mode: GameMode) {
 interface Store {
   g: GameState;
   tutorialOpen: boolean;
+  sheet: 'MEDIUM' | 'LARGE';
+  setSheet: (s: 'MEDIUM' | 'LARGE') => void;
+  uiHidden: boolean;
+  toggleUi: () => void;
   patchAssist: (a: Partial<Assist>) => void;
   practiceHazards: (on: boolean) => void;
   strike: () => void;
@@ -109,6 +113,10 @@ sound.setMuted(initialSettings.muted);
 export const useGame = create<Store>((set, get) => ({
   g: menuState(initialSettings),
   tutorialOpen: false,
+  sheet: 'MEDIUM',
+  setSheet: (sheet) => set({ sheet }),
+  uiHidden: false,
+  toggleUi: () => set({ uiHidden: !get().uiHidden }),
   patchAssist: (a) => set({ g: setAssist(get().g, a) }),
   practiceHazards: (on) => set({ g: setPracticeHazards(get().g, on) }),
   strike: () => {
@@ -228,7 +236,7 @@ export const useGame = create<Store>((set, get) => ({
     g.activeTab = t;
     if (t === 'LOGS' || t === 'DEDUCT') g.badges[t] = 0;
     sound.tab();
-    set({ g });
+    set({ g, uiHidden: false, sheet: t === 'GRID' ? get().sheet : get().g.activeTab === t ? get().sheet : 'MEDIUM' });
   },
 
   selectNode: (id, goFocus) => {

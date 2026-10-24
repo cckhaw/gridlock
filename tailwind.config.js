@@ -23,30 +23,21 @@ export default {
     extend: {
       colors: {
         scada: {
-          bg: '#090D16', // Deep Space Dark
-          panel: '#131B2E', // Card surfaces
-          border: '#1E293B', // Panel sub-borders
-          mint: '#00F5D4', // Nominal
-          amber: '#FFB703', // Caution
-          crimson: '#FF0054', // Critical
-          cobalt: '#3A86FF', // Actions / links
-          text: '#E2E8F0',
-          dim: '#64748B',
+          bg: '#000000',
+          panel: '#1c1c1e', // secondarySystemBackground
+          border: '#2c2c2e',
+          mint: '#30D158', // systemGreen
+          amber: '#FF9F0A', // systemOrange
+          crimson: '#FF453A', // systemRed
+          cobalt: '#0A84FF', // systemBlue
+          text: '#FFFFFF',
+          dim: '#8E8E93', // secondaryLabel
         },
       },
       fontFamily: {
-        hud: ['"Saira Condensed"', 'Inter', 'system-ui', 'sans-serif'],
-        sans: ['Inter', 'system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'],
-        mono: [
-          '"Fira Code"',
-          '"Share Tech Mono"',
-          'ui-monospace',
-          'SFMono-Regular',
-          'Menlo',
-          'Consolas',
-          '"Liberation Mono"',
-          'monospace',
-        ],
+        sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        hud: ['system-ui', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Rounded"', '"SF Pro Display"', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        mono: ['ui-monospace', '"SF Mono"', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
       minHeight: { touch: '48px' },
       minWidth: { touch: '48px' },
@@ -56,10 +47,10 @@ export default {
         dock: 'calc(4rem + env(safe-area-inset-bottom))',
       },
       boxShadow: {
-        'glow-mint': '0 0 12px rgba(0, 245, 212, 0.55)',
-        'glow-amber': '0 0 12px rgba(255, 183, 3, 0.55)',
-        'glow-crimson': '0 0 14px rgba(255, 0, 84, 0.65)',
-        'glow-cobalt': '0 0 12px rgba(58, 134, 255, 0.55)',
+        'glow-mint': '0 4px 16px rgba(48, 209, 88, 0.30)',
+        'glow-amber': '0 4px 16px rgba(255, 159, 10, 0.30)',
+        'glow-crimson': '0 4px 16px rgba(255, 69, 58, 0.34)',
+        'glow-cobalt': '0 4px 16px rgba(10, 132, 255, 0.34)',
       },
       dropShadow: {
         'glow-mint': '0 0 6px rgba(0, 245, 212, 0.8)',
@@ -113,20 +104,20 @@ export default {
     plugin(function ({ addBase, addComponents, addUtilities }) {
       addBase({
         ':root': {
-          '--scada-bg': '#090D16',
-          '--scada-panel': '#131B2E',
-          '--scada-border': '#1E293B',
-          '--scada-mint': '#00F5D4',
-          '--scada-amber': '#FFB703',
-          '--scada-crimson': '#FF0054',
-          '--scada-cobalt': '#3A86FF',
+          '--scada-bg': '#000000',
+          '--scada-panel': '#1c1c1e',
+          '--scada-border': '#2c2c2e',
+          '--scada-mint': '#30D158',
+          '--scada-amber': '#FF9F0A',
+          '--scada-crimson': '#FF453A',
+          '--scada-cobalt': '#0A84FF',
         },
-        html: { backgroundColor: '#090D16', color: '#E2E8F0', touchAction: 'manipulation' },
+        html: { backgroundColor: '#000000', color: '#FFFFFF', touchAction: 'manipulation', colorScheme: 'dark' },
         body: {
           margin: '0',
           overscrollBehavior: 'none',
           WebkitTapHighlightColor: 'transparent',
-          fontFamily: 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif',
         },
       });
 
@@ -156,10 +147,11 @@ export default {
 
         // Panels and touch targets
         '.scada-panel': {
-          backgroundColor: 'rgba(19,27,46,0.82)',
-          border: '1px solid rgba(148,163,184,0.16)',
-          borderRadius: '1rem',
-          backdropFilter: 'blur(8px)',
+          backgroundColor: 'rgba(28,28,30,0.62)',
+          border: '1px solid rgba(255,255,255,0.14)',
+          borderRadius: '1.25rem',
+          backdropFilter: 'blur(24px) saturate(1.7)',
+          WebkitBackdropFilter: 'blur(24px) saturate(1.7)',
         },
         '.touch-target': {
           minHeight: '48px',
@@ -174,10 +166,10 @@ export default {
       });
 
       addUtilities({
-        '.text-glow-mint': { textShadow: '0 0 8px rgba(0,245,212,0.7)' },
-        '.text-glow-amber': { textShadow: '0 0 8px rgba(255,183,3,0.7)' },
-        '.text-glow-crimson': { textShadow: '0 0 8px rgba(255,0,84,0.8)' },
-        '.text-glow-cobalt': { textShadow: '0 0 8px rgba(58,134,255,0.7)' },
+        '.text-glow-mint': { textShadow: '0 1px 2px rgba(0,0,0,0.4)' },
+        '.text-glow-amber': { textShadow: '0 1px 2px rgba(0,0,0,0.4)' },
+        '.text-glow-crimson': { textShadow: '0 1px 2px rgba(0,0,0,0.4)' },
+        '.text-glow-cobalt': { textShadow: '0 1px 2px rgba(0,0,0,0.4)' },
         '.pb-safe': { paddingBottom: 'env(safe-area-inset-bottom)' },
         '.pt-safe': { paddingTop: 'env(safe-area-inset-top)' },
         '.scrollbar-none': { scrollbarWidth: 'none', '&::-webkit-scrollbar': { display: 'none' } },
